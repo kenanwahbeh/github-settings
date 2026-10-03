@@ -25,7 +25,7 @@ uv run apply.py kenanwahbeh/<المستودع> --check test   # ويطلب نج�
 | Dependabot alerts وخريطة الاعتماديات | ✓ | ✓ |
 | Dependabot security updates | ✓ | ✓ |
 | Secret scanning وpush protection | ✓ | يُجرَّب، ويُستعمل `gitleaks` معه |
-| CodeQL (default setup) | ✓ | يُجرَّب |
+| CodeQL (default setup) | ✓ | يُجرَّب، ويُستعمل Semgrep معه |
 
 على المستودع الخاص قد يرفض GitHub الميزتين لأنهما إضافتان مدفوعة (GitHub Secret Protection وGitHub Code Security)، فيطبع `apply.py` السبب ويكمل الباقي.
 | حذف الفرع بعد الدمج، والدمج التلقائي | ✓ | ✓ |
@@ -38,6 +38,15 @@ uv run apply.py kenanwahbeh/<المستودع> --check test   # ويطلب نج�
 1. انسخ `workflows/secrets.yml` إلى `.github/workflows/secrets.yml` في المستودع.
 2. شغّل `gitleaks git --redact -v .` محلياً. ما ليس سراً (كلمات سر الاختبارات مثلاً) أضف بصمته (`Fingerprint`) إلى `.gitleaksignore`.
 3. أضف الملفين بـ pull request.
+
+## Semgrep للمستودع الخاص
+
+بديل CodeQL المجاني.
+
+1. انسخ `workflows/semgrep.yml` إلى `.github/workflows/semgrep.yml`، واختر حزم القواعد بلغات المستودع (`p/python`، `p/django`، `p/javascript`، `p/typescript`...).
+2. شغّل الأمر نفسه محلياً: `uvx semgrep scan --metrics off --error --config <الحزم> .`
+3. صحّح ما هو مشكلة فعلاً. وما ليس مشكلة أسكته على سطره بتعليق `nosemgrep: <القاعدة>` مع السبب.
+4. أضف الملف بـ pull request.
 
 ## ما لا API له
 

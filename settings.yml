@@ -11,6 +11,7 @@ security:
   secret_scanning_push_protection: true
   codeql_default_setup: true
   gitleaks_workflow: private        # workflows/secrets.yml by a pull request: private, all or none
+  semgrep_workflow: private         # workflows/semgrep.yml by a pull request, in place of CodeQL
 
 merge:
   delete_branch_on_merge: true

@@ -86,6 +86,8 @@ def main():
             "-X", "PATCH", f"repos/{repo}/code-scanning/default-setup", body={"state": "configured"}, dry_run=dry))
     if security["gitleaks_workflow"] == "all" or (security["gitleaks_workflow"] == "private" and not public):
         print("• gitleaks: add workflows/secrets.yml by a pull request (README.md).")
+    if security["semgrep_workflow"] == "all" or (security["semgrep_workflow"] == "private" and not public):
+        print("• Semgrep: add workflows/semgrep.yml by a pull request (README.md).")
 
     merge = settings["merge"]
     ok &= step("Merge settings", lambda: gh("-X", "PATCH", f"repos/{repo}", body={
