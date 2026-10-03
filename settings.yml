@@ -5,13 +5,12 @@
 security:
   dependabot_alerts: true          # also turns on the dependency graph
   dependabot_security_updates: true
-  # Free on public repositories only; private ones use gitleaks instead.
-  public:
-    secret_scanning: true
-    secret_scanning_push_protection: true
-    codeql_default_setup: true
-  private:
-    gitleaks_workflow: true        # workflows/secrets.yml, added by a pull request
+  # Tried on every repository. On a private one GitHub may refuse them
+  # (paid add-ons); apply.py then says so, and gitleaks covers the secrets.
+  secret_scanning: true
+  secret_scanning_push_protection: true
+  codeql_default_setup: true
+  gitleaks_workflow: private        # workflows/secrets.yml by a pull request: private, all or none
 
 merge:
   delete_branch_on_merge: true

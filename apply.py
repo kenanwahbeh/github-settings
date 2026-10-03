@@ -64,20 +64,27 @@ def main():
     if security["dependabot_security_updates"]:
         ok &= step("Dependabot security updates", lambda: gh("-X", "PUT", f"repos/{repo}/automated-security-fixes", dry_run=dry))
 
-    if public:
-        wanted = security["public"]
-        analysis = {}
-        if wanted["secret_scanning"]:
-            analysis["secret_scanning"] = {"status": "enabled"}
-        if wanted["secret_scanning_push_protection"]:
-            analysis["secret_scanning_push_protection"] = {"status": "enabled"}
-        if analysis:
-            ok &= step("Secret scanning and push protection", lambda: gh(
-                "-X", "PATCH", f"repos/{repo}", body={"security_and_analysis": analysis}, dry_run=dry))
-        if wanted["codeql_default_setup"]:
-            ok &= step("CodeQL default setup", lambda: gh(
-                "-X", "PATCH", f"repos/{repo}/code-scanning/default-setup", body={"state": "configured"}, dry_run=dry))
-    elif security["private"]["gitleaks_workflow"]:
+    analysis = {}
+    if security["secret_scanning"]:
+        analysis["secret_scanning"] = {"status": "enabled"}
+    if security["secret_scanning_push_protection"]:
+        analysis["secret_scanning_push_protection"] = {"status": "enabled"}
+
+    def secret_scanning():
+        result = gh("-X", "PATCH", f"repos/{repo}", body={"security_and_analysis": analysis}, dry_run=dry)
+        if dry:
+            return
+        statuses = {name: (result.get("security_and_analysis") or {}).get(name, {}).get("status")
+                    for name in analysis}
+        if any(status != "enabled" for status in statuses.values()):
+            raise RuntimeError(f"GitHub did not enable it: {statuses}")
+
+    if analysis:
+        ok &= step("Secret scanning and push protection", secret_scanning)
+    if security["codeql_default_setup"]:
+        ok &= step("CodeQL default setup", lambda: gh(
+            "-X", "PATCH", f"repos/{repo}/code-scanning/default-setup", body={"state": "configured"}, dry_run=dry))
+    if security["gitleaks_workflow"] == "all" or (security["gitleaks_workflow"] == "private" and not public):
         print("• gitleaks: add workflows/secrets.yml by a pull request (README.md).")
 
     merge = settings["merge"]
