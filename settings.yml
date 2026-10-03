@@ -1,0 +1,33 @@
+# Kinan's GitHub settings: applied to any of his repositories on request.
+# Apply with: uv run apply.py <owner/repo> [--check <name> ...]
+# What has no API is listed under `manual` in README.md.
+
+security:
+  dependabot_alerts: true          # also turns on the dependency graph
+  dependabot_security_updates: true
+  # Free on public repositories only; private ones use gitleaks instead.
+  public:
+    secret_scanning: true
+    secret_scanning_push_protection: true
+    codeql_default_setup: true
+  private:
+    gitleaks_workflow: true        # workflows/secrets.yml, added by a pull request
+
+merge:
+  delete_branch_on_merge: true
+  allow_auto_merge: true
+
+# A ruleset on the default branch. Required checks are per repository:
+# pass them with --check, never a name the repository's CI does not report,
+# or nothing can be merged.
+ruleset:
+  name: main
+  block_deletion: true
+  block_force_push: true
+  require_pull_request: true
+  required_approvals: 0
+
+# Repositories that keep direct pushes to the default branch.
+ruleset_exclude:
+  - kenanwahbeh/kenanwahbeh
+  - kenanwahbeh/kenanwahbeh.github.io
