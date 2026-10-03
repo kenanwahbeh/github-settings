@@ -126,7 +126,7 @@ def main():
                 "do_not_enforce_on_create": False,
                 "required_status_checks": [{"context": name} for name in args.check],
             }})
-        existing = [r for r in gh(f"repos/{repo}/rulesets") if r["name"] == rules["name"]]
+        existing = [r for r in gh(f"repos/{repo}/rulesets?includes_parents=false") if r["name"] == rules["name"]]
         if existing and not args.check:
             # Keep the checks the repository already requires.
             current = gh(f"repos/{repo}/rulesets/{existing[0]['id']}")

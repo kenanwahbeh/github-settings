@@ -28,10 +28,10 @@ uv run apply.py kenanwahbeh/<المستودع> --check test   # ويطلب نج�
 | Dependabot security updates | ✓ | ✓ |
 | Secret scanning وpush protection | ✓ | يُجرَّب، ويُستعمل `gitleaks` معه |
 | CodeQL (default setup) | ✓ | يُجرَّب، ويُستعمل Semgrep معه |
-
-على المستودع الخاص قد يرفض GitHub الميزتين لأنهما إضافتان مدفوعة (GitHub Secret Protection وGitHub Code Security)، فيطبع `apply.py` السبب ويكمل الباقي.
 | حذف الفرع بعد الدمج، والدمج التلقائي | ✓ | ✓ |
 | ruleset `main`: لا حذف، لا force push، كل تغيير بـ pull request | ✓ | ✓ |
+
+على المستودع الخاص قد يرفض GitHub الميزتين لأنهما إضافتان مدفوعة (GitHub Secret Protection وGitHub Code Security)، فيطبع `apply.py` السبب ويكمل الباقي.
 
 المستودعات المستثناة من الـ ruleset في `ruleset_exclude`.
 
