@@ -1,0 +1,28 @@
+name: semgrep
+
+# Code scanning on the free rules, in place of CodeQL, which a private
+# repository does not get on GitHub Pro. Fails on any finding.
+# Pick the rule packs for the repository's languages (semgrep.dev/explore):
+# p/python, p/django, p/javascript, p/typescript, p/react, p/nextjs...
+# Actions pinned by version tag, not by commit hash, are accepted: the
+# hashes would need Dependabot version updates to stay current.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  semgrep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+      - run: >-
+          uvx semgrep==1.179.0 scan --metrics off --error
+          --config p/default --config p/secrets
+          --exclude-rule yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
+          .
