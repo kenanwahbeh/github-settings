@@ -16,6 +16,8 @@ uv run apply.py kenanwahbeh/<المستودع>                # يطبّق
 uv run apply.py kenanwahbeh/<المستودع> --check test   # ويطلب نجاح فحص الـ CI test قبل الدمج
 ```
 
+بعد إضافة `gitleaks` وSemgrep للمستودع الخاص، أعد التطبيق بـ `--check gitleaks --check semgrep` (ومعهما فحوص الـ CI الأخرى) حتى يمنعا الدمج.
+
 أضف `--check` فقط باسم فحص يظهر فعلاً في الـ CI للمستودع، وإلا لن يُدمج أي pull request. وإن كان للمستودع ruleset باسم `main` يطلب فحوصاً، تبقى فحوصه إن لم تُمرَّر `--check`.
 
 ## ما يطبّقه `apply.py`
