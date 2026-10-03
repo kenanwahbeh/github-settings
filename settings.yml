@@ -12,10 +12,25 @@ security:
   codeql_default_setup: true
   gitleaks_workflow: private        # workflows/secrets.yml by a pull request: private, all or none
   semgrep_workflow: private         # workflows/semgrep.yml by a pull request, in place of CodeQL
+  private_vulnerability_reporting: public   # public-only feature: public, all or none
+  dependabot_version_updates: all   # templates/dependabot.yml by a pull request: all or none
+  security_policy: public           # templates/SECURITY.md by a pull request: public, all or none
 
 merge:
   delete_branch_on_merge: true
   allow_auto_merge: true
+  # One merge method. Keep this in step with `ruleset.allowed_merge_methods`.
+  allow_squash_merge: true
+  allow_merge_commit: false
+  allow_rebase_merge: false
+
+# GitHub Actions at the repository level.
+actions:
+  default_workflow_permissions: read          # GITHUB_TOKEN read-only unless a workflow asks for more
+  can_approve_pull_request_reviews: false     # workflows cannot approve pull requests
+  fork_pr_approval: all_external_contributors # first_time_contributors_new_to_github, first_time_contributors or all_external_contributors
+  # Not enforced: sha_pinning_required. workflows/semgrep.yml accepts actions
+  # pinned by version tag on purpose; enable it only after pinning by SHA.
 
 # A ruleset on the default branch. Required checks are per repository:
 # pass them with --check, never a name the repository's CI does not report,
@@ -26,6 +41,15 @@ ruleset:
   block_force_push: true
   require_pull_request: true
   required_approvals: 0
+  allowed_merge_methods: [squash]
+  require_signed_commits: true
+
+# A ruleset on release tags: a published version can neither move nor vanish.
+tag_ruleset:
+  name: tags
+  pattern: "v*"
+  block_deletion: true
+  block_update: true
 
 # Repositories that keep direct pushes to the default branch.
 ruleset_exclude:
