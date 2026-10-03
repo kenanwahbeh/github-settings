@@ -29,11 +29,27 @@ uv run apply.py kenanwahbeh/<المستودع> --check test   # ويطلب نج�
 | Secret scanning وpush protection | ✓ | يُجرَّب، ويُستعمل `gitleaks` معه |
 | CodeQL (default setup) | ✓ | يُجرَّب، ويُستعمل Semgrep معه |
 | حذف الفرع بعد الدمج، والدمج التلقائي | ✓ | ✓ |
-| ruleset `main`: لا حذف، لا force push، كل تغيير بـ pull request | ✓ | ✓ |
+| طريقة دمج واحدة: squash | ✓ | ✓ |
+| ruleset `main`: لا حذف، لا force push، commits موقّعة، كل تغيير بـ pull request | ✓ | ✓ |
+| ruleset `tags`: الوسوم `v*` لا تُحذف ولا تتحرك | ✓ | ✓ |
+| Actions: `GITHUB_TOKEN` للقراءة فقط، ولا يوافق على الـ pull requests | ✓ | ✓ |
+| Actions: موافقة يدوية على تشغيل pull requests القادمة من الخارج | ✓ | لا (يرفضها GitHub) |
+| Private vulnerability reporting | ✓ | لا (للعام فقط) |
 
 على المستودع الخاص قد يرفض GitHub الميزتين لأنهما إضافتان مدفوعة (GitHub Secret Protection وGitHub Code Security)، فيطبع `apply.py` السبب ويكمل الباقي.
 
-المستودعات المستثناة من الـ ruleset في `ruleset_exclude`.
+المستودعات المستثناة من ruleset `main` في `ruleset_exclude`؛ ruleset الوسوم يُطبَّق عليها.
+
+القائمة الكاملة لما يمكن ضبطه وما اخترنا تركه: `RECOMMENDATIONS.md`.
+
+## ملفات تُضاف بـ pull request
+
+| الملف | المصدر | لمن |
+|---|---|---|
+| `.github/workflows/secrets.yml` | `workflows/secrets.yml` | الخاص |
+| `.github/workflows/semgrep.yml` | `workflows/semgrep.yml` | الخاص |
+| `.github/dependabot.yml` | `templates/dependabot.yml` | الكل. أبقِ `github-actions` وأضف نظام المستودع (pip وnpm...). |
+| `SECURITY.md` | `templates/SECURITY.md` | العام |
 
 ## `gitleaks` للمستودع الخاص
 
@@ -54,7 +70,9 @@ uv run apply.py kenanwahbeh/<المستودع> --check test   # ويطلب نج�
 
 هذه تُضبط من الموقع مرة واحدة للحساب:
 
-- **التحقق بخطوتين:** https://github.com/settings/security
+- **التحقق بخطوتين:** https://github.com/settings/security. الأفضل مفتاح مرور (passkey) أو مفتاح أمان، مع حفظ رموز الاسترداد.
+- **الـ tokens:** استعمل fine-grained tokens فقط، لمستودع محدد وبمدة قصيرة (https://github.com/settings/personal-access-tokens). وأزل القديم من https://github.com/settings/tokens.
+- **مراجعة دورية:** مفاتيح SSH (https://github.com/settings/keys) والتطبيقات المرخَّصة (https://github.com/settings/applications). احذف ما لا تستعمله.
 - **الإعدادات الافتراضية للمستودعات الجديدة:** https://github.com/settings/security_analysis. لكل ميزة اضغط **Enable all**، وفعّل **Automatically enable for new repositories**. ويشمل ذلك Grouped security updates وMalware alerts، ولا API لهما.
 - **توقيع الـ commits:** على كل جهاز جديد:
 
