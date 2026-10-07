@@ -26,8 +26,8 @@ uv run apply.py kenanwahbeh/<المستودع> --check test   # ويطلب نج�
 |---|---|---|
 | Dependabot alerts وخريطة الاعتماديات | ✓ | ✓ |
 | Dependabot security updates | ✓ | ✓ |
-| Secret scanning وpush protection | ✓ | يُجرَّب، ويُستعمل `gitleaks` معه |
-| CodeQL (default setup) | ✓ | يُجرَّب، ويُستعمل Semgrep معه |
+| Secret scanning وpush protection | ✓ | ❌ (ميزة مدفوعة) — الغطاء: **gitleaks** |
+| CodeQL (default setup) | ✓ | ❌ (ميزة مدفوعة) — البديل: **Semgrep** |
 | حذف الفرع بعد الدمج، والدمج التلقائي | ✓ | ✓ |
 | طريقة دمج واحدة: squash | ✓ | ✓ |
 | ruleset `main`: لا حذف، لا force push، commits موقّعة، كل تغيير بـ pull request | ✓ | ✓ |
@@ -35,8 +35,6 @@ uv run apply.py kenanwahbeh/<المستودع> --check test   # ويطلب نج�
 | Actions: `GITHUB_TOKEN` للقراءة فقط، ولا يوافق على الـ pull requests | ✓ | ✓ |
 | Actions: موافقة يدوية على تشغيل pull requests القادمة من الخارج | ✓ | لا (يرفضها GitHub) |
 | Private vulnerability reporting | ✓ | لا (للعام فقط) |
-
-على المستودع الخاص قد يرفض GitHub الميزتين لأنهما إضافتان مدفوعة (GitHub Secret Protection وGitHub Code Security)، فيطبع `apply.py` السبب ويكمل الباقي.
 
 المستودعات المستثناة من ruleset `main` في `ruleset_exclude`؛ ruleset الوسوم يُطبَّق عليها.
 
@@ -50,6 +48,17 @@ uv run apply.py kenanwahbeh/<المستودع> --check test   # ويطلب نج�
 | `.github/workflows/semgrep.yml` | `workflows/semgrep.yml` | الخاص |
 | `.github/dependabot.yml` | `templates/dependabot.yml` | الكل. أبقِ `github-actions` وأضف نظام المستودع (pip وnpm...). |
 | `SECURITY.md` | `templates/SECURITY.md` | العام |
+
+> **مشاريع Next.js / npm:** أضف bloc `npm` في `.github/dependabot.yml` (الدليل `/agent-web` أو جذر المشروع):
+> ```yaml
+>   - package-ecosystem: npm
+>     directory: /agent-web
+>     schedule:
+>       interval: weekly
+>     groups:
+>       npm:
+>         patterns: ["*"]
+> ```
 
 ## `gitleaks` للمستودع الخاص
 
