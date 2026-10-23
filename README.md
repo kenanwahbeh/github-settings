@@ -1,99 +1,97 @@
-# إعدادات GitHub الخاصة بكنان
+# github-settings — إعدادات GitHub ودليل وكيل البرمجة
 
-تُطبَّق هذه الإعدادات على أي مستودع عند الطلب. مصدرها `settings.yml`، ويطبّقها `apply.py`.
+هذا المستودع يؤدي وظيفتين منفصلتين:
+1. **مستودع مرجعي لإعدادات GitHub**: يطبّق `settings.yml` عبر `apply.py` عند الطلب.
+2. **مرجع لقواعد وكيل البرمجة**: يوفّر تعليمات عامة ومعايير للكود والأمان والاختبارات، مع تصور معماري لـ Cloudflare Workers AI.
 
-## الطلب من Claude
+## نقطة دخول الوكيل
 
-اكتب: «طبّق إعدادات الأمان الخاصة بكنان على المستودع `<الاسم>`». يقرأ Claude هذا المستودع، ويشغّل `apply.py`، ويضيف `gitleaks` بـ pull request إن كان المستودع خاصاً.
+ابدأ بقراءة [AGENTS.md](AGENTS.md) قبل تعديل الكود، ثم اقرأ الوثيقة المرتبطة بالمهمة:
 
-## التطبيق يدوياً
+- [قواعد البرمجة](docs/coding-standards.md)
+- [خط أساس الأمان](docs/security.md)
+- [الاختبارات وCI](docs/testing-and-ci.md)
+- [مرجع الأدوات والمستودعات](docs/tooling.md)
+- [تصميم وكيل باستخدام Cloudflare Workers AI](docs/cloudflare-workers-ai.md)
 
-يحتاج `gh` مسجَّل الدخول، و`uv`:
+تعليمات [CLAUDE.md](CLAUDE.md) الخاصة بـ Claude Code ما زالت مهمة عند استخدامه. هذه القواعد إرشادات عامة؛ تعليمات المشروع نفسه وطلب المستخدم يحددان التفاصيل. لا تفترض أن أداة مثبتة أو أن خدمة Cloudflare AI موصولة فعلياً.
+
+## تطبيق إعدادات GitHub
+
+يحتاج التطبيق إلى `gh` مسجّل الدخول و`uv`:
 
 ```bash
-uv run apply.py kenanwahbeh/<المستودع> --dry-run      # يعرض ما سيتغير فقط
-uv run apply.py kenanwahbeh/<المستودع>                # يطبّق
-uv run apply.py kenanwahbeh/<المستودع> --check test   # ويطلب نجاح فحص الـ CI test قبل الدمج
+uv run apply.py kenanwahbeh/<repository> --dry-run
+uv run apply.py kenanwahbeh/<repository>
+uv run apply.py kenanwahbeh/<repository> --check test
 ```
 
-بعد إضافة `gitleaks` وSemgrep للمستودع الخاص، أعد التطبيق بـ `--check gitleaks --check semgrep` (ومعهما فحوص الـ CI الأخرى) حتى يمنعا الدمج.
+ابدأ بـ `--dry-run` لمراجعة التغييرات. أضف `--check` فقط باسم فحص CI يظهر فعلاً في المستودع؛ الاسم غير الموجود قد يمنع دمج الـ Pull Requests. إذا كان هناك ruleset باسم `main` يطلب فحوصاً، يحافظ التطبيق على الفحوص الحالية عند عدم تمرير `--check`.
 
-أضف `--check` فقط باسم فحص يظهر فعلاً في الـ CI للمستودع، وإلا لن يُدمج أي pull request. وإن كان للمستودع ruleset باسم `main` يطلب فحوصاً، تبقى فحوصه إن لم تُمرَّر `--check`.
-
-## ما يطبّقه `apply.py`
+## ما الذي تضبطه الأداة؟
 
 | الإعداد | المستودع العام | المستودع الخاص |
 |---|---|---|
-| Dependabot alerts وخريطة الاعتماديات | ✓ | ✓ |
-| Dependabot security updates | ✓ | ✓ |
-| Secret scanning وpush protection | ✓ | ❌ (ميزة مدفوعة) — الغطاء: **gitleaks** |
-| CodeQL (default setup) | ✓ | ❌ (ميزة مدفوعة) — البديل: **Semgrep** |
-| حذف الفرع بعد الدمج، والدمج التلقائي | ✓ | ✓ |
-| طريقة دمج واحدة: squash | ✓ | ✓ |
-| ruleset `main`: لا حذف، لا force push، commits موقّعة، كل تغيير بـ pull request | ✓ | ✓ |
-| ruleset `tags`: الوسوم `v*` لا تُحذف ولا تتحرك | ✓ | ✓ |
-| Actions: `GITHUB_TOKEN` للقراءة فقط، ولا يوافق على الـ pull requests | ✓ | ✓ |
-| Actions: موافقة يدوية على تشغيل pull requests القادمة من الخارج | ✓ | لا (يرفضها GitHub) |
-| Private vulnerability reporting | ✓ | لا (للعام فقط) |
+| Dependabot alerts وخريطة الاعتماديات | نعم | نعم |
+| Dependabot security updates | نعم | نعم |
+| Secret scanning وpush protection | نعم | قد تتطلب خطة مدفوعة؛ Gitleaks بديل |
+| CodeQL default setup | حسب دعم GitHub | قد تتطلب خطة مدفوعة؛ Semgrep بديل |
+| حذف الفرع بعد الدمج والدمج التلقائي | نعم | نعم |
+| طريقة الدمج | squash فقط | squash فقط |
+| ruleset للفرع الافتراضي ووسوم `v*` | نعم | نعم |
+| صلاحيات GitHub Actions الافتراضية | قراءة فقط | قراءة فقط |
+| Private vulnerability reporting | نعم | غير متاح بهذه السياسة |
 
-المستودعات المستثناة من ruleset `main` في `ruleset_exclude`؛ ruleset الوسوم يُطبَّق عليها.
+القيم الفعلية في [settings.yml](settings.yml)، والتفاصيل والخيارات التي لم تُعتمد في [RECOMMENDATIONS.md](RECOMMENDATIONS.md). المستودعات المذكورة في `ruleset_exclude` مستثناة من ruleset الفرع الافتراضي فقط؛ تبقى بقية الإعدادات وقاعدة الوسوم مطبقة.
 
-القائمة الكاملة لما يمكن ضبطه وما اخترنا تركه: `RECOMMENDATIONS.md`.
+## ملفات تُضاف إلى المستودعات المستهدفة عند الحاجة
 
-## ملفات تُضاف بـ pull request
-
-| الملف | المصدر | لمن |
+| الملف الهدف | المصدر داخل هذا المستودع | النطاق |
 |---|---|---|
-| `.github/workflows/secrets.yml` | `workflows/secrets.yml` | الخاص |
-| `.github/workflows/semgrep.yml` | `workflows/semgrep.yml` | الخاص |
-| `.github/dependabot.yml` | `templates/dependabot.yml` | الكل. أبقِ `github-actions` وأضف نظام المستودع (pip وnpm...). |
-| `SECURITY.md` | `templates/SECURITY.md` | العام |
+| `.github/workflows/secrets.yml` | `workflows/secrets.yml` | Gitleaks، للمستودعات الخاصة حسب الإعداد |
+| `.github/workflows/semgrep.yml` | `workflows/semgrep.yml` | Semgrep، للمستودعات الخاصة حسب الإعداد |
+| `.github/dependabot.yml` | `templates/dependabot.yml` | جميع المستودعات؛ أضف منظومة المشروع مثل pip أو npm |
+| `SECURITY.md` | `templates/SECURITY.md` | المستودعات العامة حسب الإعداد |
 
-> **مشاريع Next.js / npm:** أضف bloc `npm` في `.github/dependabot.yml` (الدليل `/agent-web` أو جذر المشروع):
-> ```yaml
->   - package-ecosystem: npm
->     directory: /agent-web
->     schedule:
->       interval: weekly
->     groups:
->       npm:
->         patterns: ["*"]
-> ```
+### Gitleaks للمستودع الخاص
 
-## `gitleaks` للمستودع الخاص
+1. انسخ `workflows/secrets.yml` إلى `.github/workflows/secrets.yml` في المستودع المستهدف.
+2. شغّل `gitleaks git --redact -v .` محلياً.
+3. إذا ظهرت نتيجة ليست سراً، أضف بصمتها إلى `.gitleaksignore` مع التحقق من أنها آمنة.
+4. أرسل التغييرات عبر Pull Request.
 
-1. انسخ `workflows/secrets.yml` إلى `.github/workflows/secrets.yml` في المستودع.
-2. شغّل `gitleaks git --redact -v .` محلياً. ما ليس سراً (كلمات سر الاختبارات مثلاً) أضف بصمته (`Fingerprint`) إلى `.gitleaksignore`.
-3. أضف الملفين بـ pull request.
+### Semgrep للمستودع الخاص
 
-## Semgrep للمستودع الخاص
+1. انسخ `workflows/semgrep.yml` إلى `.github/workflows/semgrep.yml`.
+2. اختر حزم القواعد المناسبة للغات المستخدمة، مثل `p/python` أو `p/django` أو `p/javascript` أو `p/typescript`.
+3. شغّل محلياً، مثلاً: `uvx semgrep scan --metrics off --error --config <الحزم> .`.
+4. أصلح النتائج الصحيحة؛ لا تتجاهل نتيجة إلا بعد مراجعتها وتوثيق سبب الاستثناء.
 
-بديل CodeQL المجاني.
+لمشاريع Next.js، أضف إعداد `npm` إلى `.github/dependabot.yml` مع المسار الصحيح، مثل `/agent-web` أو `/`.
 
-1. انسخ `workflows/semgrep.yml` إلى `.github/workflows/semgrep.yml`، واختر حزم القواعد بلغات المستودع (`p/python`، `p/django`، `p/javascript`، `p/typescript`...).
-2. شغّل الأمر نفسه محلياً: `uvx semgrep scan --metrics off --error --config <الحزم> .`
-3. صحّح ما هو مشكلة فعلاً. وما ليس مشكلة أسكته على سطره بتعليق `nosemgrep: <القاعدة>` مع السبب.
-4. أضف الملف بـ pull request.
+### جعل فحوص Gitleaks وSemgrep مطلوبة قبل الدمج
 
-## ما لا API له
+بعد إضافة ملفات الـ workflows إلى المستودع المستهدف، أعد تطبيق قواعد الحماية مع أسماء فحوص CI الفعلية. في هذا القالب اسم مهمة Gitleaks هو `gitleaks` واسم مهمة Semgrep هو `semgrep`:
 
-هذه تُضبط من الموقع مرة واحدة للحساب:
+```bash
+uv run apply.py <owner/repo> --check gitleaks --check semgrep
+```
 
-- **التحقق بخطوتين:** https://github.com/settings/security. الأفضل مفتاح مرور (passkey) أو مفتاح أمان، مع حفظ رموز الاسترداد.
-- **الـ tokens:** استعمل fine-grained tokens فقط، لمستودع محدد وبمدة قصيرة (https://github.com/settings/personal-access-tokens). وأزل القديم من https://github.com/settings/tokens.
-- **مراجعة دورية:** مفاتيح SSH (https://github.com/settings/keys) والتطبيقات المرخَّصة (https://github.com/settings/applications). احذف ما لا تستعمله.
-- **الإعدادات الافتراضية للمستودعات الجديدة:** https://github.com/settings/security_analysis. لكل ميزة اضغط **Enable all**، وفعّل **Automatically enable for new repositories**. ويشمل ذلك Grouped security updates وMalware alerts، ولا API لهما.
-- **توقيع الـ commits:** على كل جهاز جديد:
+أضف أيضًا أسماء الفحوص الأخرى التي يجب أن تمنع الدمج. تحقّق من ظهور هذه الأسماء فعلًا في نتائج Checks الخاصة بطلب الدمج قبل استخدامها؛ الاسم الخاطئ قد يمنع دمج كل طلبات الدمج في المستودع.
 
-  ```bash
-  ssh-keygen -t ed25519 -C "<الجهاز>"
-  gh ssh-key add ~/.ssh/id_ed25519.pub --title "<الجهاز>"                   # للدخول
-  gh auth refresh -h github.com -s admin:ssh_signing_key
-  gh ssh-key add ~/.ssh/id_ed25519.pub --type signing --title "<الجهاز> signing"
-  git config --global gpg.format ssh
-  git config --global user.signingkey ~/.ssh/id_ed25519.pub
-  git config --global commit.gpgsign true
-  git config --global tag.gpgsign true
-  ```
 
-  البريد في `git config user.email` يجب أن يكون مسجّلاً في الحساب، وإلا لا يظهر الـ commit بـ Verified.
+## إعدادات حساب لا تتوفر لها API مناسبة في هذا الإجراء
+
+تُراجع هذه الإعدادات يدوياً من GitHub:
+
+- **التحقق بخطوتين:** https://github.com/settings/security. يُفضّل مفتاح مرور أو مفتاح أمان، مع حفظ رموز الاسترداد.
+- **Tokens:** استخدم fine-grained tokens لمستودعات وصلاحيات محددة ومدة قصيرة: https://github.com/settings/personal-access-tokens. راجع الرموز القديمة من https://github.com/settings/tokens.
+- **المفاتيح والتطبيقات المصرّح لها:** https://github.com/settings/keys وhttps://github.com/settings/applications.
+- **الإعدادات الافتراضية لتحليل الأمان للمستودعات الجديدة:** https://github.com/settings/security_analysis. راجع الخيارات المتاحة وفعّل التمكين التلقائي حيث يلائمك.
+- **توقيع commits عبر SSH:** اتبع توثيق GitHub الرسمي، وتأكد أن بريد Git مضبوط على عنوان مسجل في الحساب كي يظهر التوقيع كـ Verified.
+
+## مبدأ الأمان وحدود المستودع
+
+لا تمنح وكيل البرمجة صلاحيات غير محدودة. افصل اقتراح التغيير عن تنفيذه، شغّل الفحوص، راجع diff، واجعل الدمج والنشر والعمليات المدمّرة بحاجة إلى موافقة صريحة.
+
+هذا المستودع يوثّق قواعد مقترحة ويحتوي أداة إعدادات GitHub. وجود وثائق Cloudflare Workers AI لا يعني أن الوكيل أو تكامله قد أُنشئ أو نُشر.
