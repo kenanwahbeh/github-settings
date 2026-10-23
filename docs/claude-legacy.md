@@ -1,4 +1,16 @@
-# CLAUDE.md
+# CLAUDE.md — أرشيف (deprecated)
+
+> **هذا الملف مؤرشف.** انتُقلت كل المعلومات التشغيلية الفريدة منه إلى وثائق محايدة للأدوات:
+> - خطوات المستودع النموذج وأوامر `apply.py` والاختبارات وفحص التزامن → [README.md](../README.md) (قسم "تطبيق إعدادات GitHub" و"المستودع النموذج")
+> - سياسة ملكية قواعد الـ rulesets → تعليقات [settings.yml](../settings.yml)
+> - سلوك `--dry-run` بعد الإصلاح (قراءة فعلية، محاكاة الكتابة فقط) → README وتعليقات `apply.py`
+> - البنية المعمارية (gh/step/upsert_ruleset، القوالب والمرآة) → README وAGENTS.md
+>
+> لا تُحدّث هذا الملف؛ عدّل الوثائق أعلاه. يُحذف عند التأكد من عدم وجود اعتماد خارجي عليه.
+
+---
+
+## النص الأصلي (للمرجعية التاريخية)
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -15,12 +27,13 @@ The README and user-facing explanations are written in Arabic; keep that languag
 
 ## Commands
 
-Requires an authenticated `gh` and `uv` (dependencies are declared inline in `apply.py`; there is no build, lint, or test suite).
+Requires an authenticated `gh` and `uv` (dependencies are declared inline in `apply.py`).
 
 ```bash
-uv run apply.py kenanwahbeh/<repo> --dry-run      # print the gh api calls only
+uv run apply.py kenanwahbeh/<repo> --dry-run      # reads execute, writes are previewed only
 uv run apply.py kenanwahbeh/<repo>                # apply
 uv run apply.py kenanwahbeh/<repo> --check test   # also require CI check "test"; repeatable
+python3 tests/test_apply.py                       # unit tests, no network needed
 ```
 
 Exit code is non-zero if any step failed. `gitleaks` / Semgrep are not run by `apply.py`; it only prints a reminder to add them by pull request.
@@ -32,10 +45,9 @@ Exit code is non-zero if any step failed. `gitleaks` / Semgrep are not run by `a
 - A second ruleset (`tag_ruleset`, target `tag`, pattern `v*`) blocks deleting or moving release tags. The `main` ruleset also requires signed commits and allows squash merges only (keep `merge.allow_*` and `ruleset.allowed_merge_methods` consistent). Both go through `upsert_ruleset()`.
 - `apply.py` also sets Actions defaults (read-only `GITHUB_TOKEN`, approval for outside-contributor PRs) and, on public repos only, private vulnerability reporting. `sha_pinning_required` is deliberately not enforced because `workflows/semgrep.yml` accepts tag-pinned actions.
 - Repos listed in `ruleset_exclude` skip the `main` ruleset only; the tag ruleset and all other settings still apply.
-- `workflows/*.yml` are templates to copy into target repos' `.github/workflows/`. `.github/workflows/*.yml` here are identical copies, so this repo is protected by the same gitleaks and Semgrep checks. Keep the two directories in sync when editing either. `templates/dependabot.yml` is likewise mirrored at `.github/dependabot.yml`; `templates/SECURITY.md` (public targets) is mirrored at `SECURITY.md`.
+- `workflows/*.yml` are templates to copy into target repos' `.github/workflows/`. `.github/workflows/*.yml` here are kept identical, so this repo is protected by the same gitleaks and Semgrep checks. Keep the two directories in sync when editing either (`scripts/check-workflows-sync.sh`). `templates/dependabot.yml` is likewise mirrored at `.github/dependabot.yml`; `templates/SECURITY.md` (public targets) is mirrored at `SECURITY.md`.
 
 ## Gotchas
 
 - Never pass `--check` with a name the target's CI does not report: the ruleset would then block every merge.
 - Secret scanning and CodeQL may be rejected on private repos (paid add-ons); that is expected, and gitleaks/Semgrep are the substitute.
-- Changes to this repo itself go through pull requests (the `main` ruleset applies here too).

@@ -30,3 +30,9 @@
 - https://github.com/fastapi/fastapi وhttps://github.com/supabase/supabase — مراجع تقنية للمشاريع التي تستخدم هذه الأدوات وليست مهارات عامة.
 
 تعليمات Claude Code لا تعمل بالضرورة مباشرة مع أي وكيل آخر. تكيّفها مع بيئة التنفيذ، وراجعها قبل منحها صلاحية استدعاء الأدوات.
+
+## أدوات هذا المستودع نفسها
+
+- `apply.py`: تُطبَّق بـ `uv run`؛ اختباراتها: `python3 tests/test_apply.py` (بلا شبكة).
+- `scripts/check-workflows-sync.sh`: فحص تزامن القوالب مع `.github/workflows/`.
+- قائمة أوسع بمراجع الأدوات والنطاقات: [TOOLS_CATALOG.md](TOOLS_CATALOG.md) — وجود أداة في الكتالوج لا يجعلها اعتماداً معمارياً.
