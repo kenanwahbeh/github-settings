@@ -33,6 +33,7 @@
 
 ## أدوات هذا المستودع نفسها
 
+- `scripts/check-tool-versions.sh` + `scripts/tool-versions.cfg`: مصدر الحقيقة لإصدارات الأدوات المكتوبة داخل أوامر shell، لا يغطيهما Dependabot.
 - `apply.py`: تُطبَّق بـ `uv run`؛ اختباراتها: `uv run --with pyyaml python tests/test_apply.py` (بلا شبكة؛ الأمر المباشر `python3` يتطلب PyYAML في البيئة).
 - `scripts/check-workflows-sync.sh`: فحص تزامن القوالب مع `.github/workflows/`.
 - قائمة أوسع بمراجع الأدوات والنطاقات: [TOOLS_CATALOG.md](TOOLS_CATALOG.md) — وجود أداة في الكتالوج لا يجعلها اعتماداً معمارياً.

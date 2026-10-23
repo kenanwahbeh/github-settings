@@ -67,10 +67,10 @@ class TestUpsertRuleset(unittest.TestCase):
              mock.patch("builtins.print") as out:
             printed = []
             out.side_effect = lambda *a, **k: printed.append(" ".join(str(x) for x in a))
-            apply.upsert_ruleset("o/r", dict(self.BODY), dry=True, keep_checks=True)
+            apply.upsert_ruleset("o/r", dict(self.BODY), dry=True, keep_rules=("required_status_checks",))
         joined = "\n".join(printed)
         self.assertIn("(updated)", joined)          # honest preview: update, not create
-        self.assertIn("would keep 1 existing", joined)
+        self.assertIn("would keep 1 existing", joined)  # keeps... required_status_checks
         self.assertIn("PUT", joined)
 
     def test_dry_run_preview_payload_contains_retained_checks(self):
@@ -87,7 +87,7 @@ class TestUpsertRuleset(unittest.TestCase):
              mock.patch("builtins.print") as out:
             printed = []
             out.side_effect = lambda *a, **k: printed.append(" ".join(str(x) for x in a))
-            apply.upsert_ruleset("o/r", body, dry=True, keep_checks=True)
+            apply.upsert_ruleset("o/r", body, dry=True, keep_rules=("required_status_checks",))
         joined = "\n".join(printed)
         payload_line = next(line for line in printed if "would run:" in line and "PUT" in line)
         payload = json.loads(payload_line[payload_line.index("{"):payload_line.rindex("}") + 1])
@@ -103,7 +103,7 @@ class TestUpsertRuleset(unittest.TestCase):
              mock.patch("builtins.print") as out:
             printed = []
             out.side_effect = lambda *a, **k: printed.append(" ".join(str(x) for x in a))
-            apply.upsert_ruleset("o/r", dict(self.BODY), dry=True, keep_checks=True)
+            apply.upsert_ruleset("o/r", dict(self.BODY), dry=True, keep_rules=("required_status_checks",))
         joined = "\n".join(printed)
         self.assertIn("POST repos/o/r/rulesets", joined)
 
@@ -116,20 +116,55 @@ class TestUpsertRuleset(unittest.TestCase):
                                                                [{"context": "real-check"}]}}]},
         }
         with mock.patch.object(apply.subprocess, "run", fake_run(responses)):
-            apply.upsert_ruleset("o/r", body, dry=False, keep_checks=True)
+            apply.upsert_ruleset("o/r", body, dry=False, keep_rules=("required_status_checks",))
         self.assertEqual(len(body["rules"]), 2)  # own rule + kept status checks
         self.assertEqual(body["rules"][1]["type"], "required_status_checks")
 
     def test_tag_ruleset_does_not_keep_manual_rules(self):
         # Documents the current ownership policy (Policy A for tags):
-        # without keep_checks, existing rules are NOT merged into the body.
+        # with an empty keep_rules list (settings.yml tag_ruleset.keep_existing_rules: []),
+        # existing rules are NOT merged into the body.
         body = json.loads(json.dumps(self.BODY))
         responses = {
             "repos/o/r/rulesets?includes_parents=false": [{"id": 9, "name": "protect-main"}],
         }
         with mock.patch.object(apply.subprocess, "run", fake_run(responses)):
-            apply.upsert_ruleset("o/r", body, dry=False, keep_checks=False)
+            apply.upsert_ruleset("o/r", body, dry=False, keep_rules=())
         self.assertEqual(len(body["rules"]), 1)
+
+    def test_keeps_any_exempted_rule_type(self):
+        # The policy is type-driven: any rule type listed in
+        # settings.yml keep_existing_rules survives re-apply, not only checks.
+        body = json.loads(json.dumps(self.BODY))
+        responses = {
+            "repos/o/r/rulesets?includes_parents=false": [{"id": 7, "name": "protect-main"}],
+            "repos/o/r/rulesets/7": {"rules": [
+                {"type": "commit_message_pattern", "parameters": {"operator": "starts_with"}}]},
+        }
+        with mock.patch.object(apply.subprocess, "run", fake_run(responses)):
+            apply.upsert_ruleset("o/r", body, dry=False, keep_rules=("commit_message_pattern",))
+        self.assertEqual(len(body["rules"]), 2)
+        self.assertEqual(body["rules"][1]["type"], "commit_message_pattern")
+
+    def test_non_exempted_rules_are_dropped_on_update(self):
+        # Policy A contract: a manual rule whose type is NOT exempted is
+        # silently replaced by the central settings — documented, tested.
+        responses = {
+            "repos/o/r/rulesets?includes_parents=false": [{"id": 7, "name": "protect-main"}],
+            "repos/o/r/rulesets/7": {"rules": [
+                {"type": "required_status_checks"}, {"type": "pull_request"}]},
+        }
+        body = json.loads(json.dumps(self.BODY))
+        with mock.patch.object(apply.subprocess, "run", fake_run(responses)), \
+             mock.patch("builtins.print") as out:
+            printed = []
+            out.side_effect = lambda *a, **k: printed.append(" ".join(str(x) for x in a))
+            apply.upsert_ruleset("o/r", body, dry=True, keep_rules=("required_status_checks",))
+        text = next(line for line in printed if "would run:" in line and "PUT" in line)
+        payload = json.loads(text[text.index("{"): text.rindex("}") + 1])
+        types = [r["type"] for r in payload["rules"]]
+        self.assertIn("required_status_checks", types)   # exempted: kept
+        self.assertNotIn("pull_request", types)          # not exempted: dropped
 
 
 class TestWriteDetection(unittest.TestCase):

@@ -28,7 +28,7 @@ uv run apply.py kenanwahbeh/<repository> --check test
 
 ابدأ بـ `--dry-run` لمراجعة التغييرات؛ في هذا الوضع تنفّذ الأداة عمليات القراءة فقط وتعرض عمليات الكتابة دون تنفيذها (يتطلب اتصالاً و`gh` مصادقاً عليه وصلاحيات قراءة). أضف `--check` فقط باسم فحص CI يظهر فعلاً في المستودع؛ الاسم غير الموجود قد يمنع دمج الـ Pull Requests. إذا كان هناك ruleset باسم `main` يطلب فحوصاً، يحافظ التطبيق على الفحوص الحالية عند عدم تمرير `--check`. سياسة ملكية القواعد موثّقة في تعليقات `settings.yml`: الفرع يستثني `required_status_checks` فقط، وقواعد الوسوم تملكها `settings.yml` بالكامل.
 
-**ملاحظة عن قوالب workflows:** `workflows/` هي القوالب التي تُنسخ إلى المستودعات المستهدفة، أما `.github/workflows/` فهي نسخة هذا المستودع العاملة لحماية نفسه بهما. يجب أن يبقى كل زوج متطابقاً؛ فحص `scripts/check-workflows-sync.sh` يمنع الانحراف. إصدارات الأدوات المكتوبة داخل أوامر shell (`GITLEAKS_VERSION`، ونسخة Semgrep في سطر `uvx`) لا يحدّثها Dependabot — تُحدَّث يدوياً في الملفين معاً عند الترقيات.
+**ملاحظة عن قوالب workflows:** `workflows/` هي القوالب التي تُنسخ إلى المستودعات المستهدفة، أما `.github/workflows/` فهي نسخة هذا المستودع العاملة لحماية نفسه بهما. يجب أن يبقى كل زوج متطابقاً؛ فحص `scripts/check-workflows-sync.sh` يمنع الانحراف. إصدارات الأدوات المكتوبة داخل أوامر shell (`GITLEAKS_VERSION`، ونسخة Semgrep في سطر `uvx`) لا يحدّثها Dependabot — قيمها مثبتة في `scripts/tool-versions.cfg` ويُحدَّث الملفان معاً عنده ثم يُتحقق بـ `scripts/check-tool-versions.sh`.
 
 ### المستودع النموذج: خطوات الوكيل الكاملة
 
@@ -40,7 +40,7 @@ uv run apply.py kenanwahbeh/<repository> --check test
 4. الإبلاغ عن بنود "إعدادات حساب لا تتوفر لها API مناسبة" أدناه يدوياً بدل محاولة أتمتتها.
 
 **اختبارات الأداة**: `uv run --with pyyaml python tests/test_apply.py` — بلا شبكة ولا حاجة لـ `gh`. (الأمر المباشر `python3 tests/test_apply.py` يعمل فقط إذا كانت PyYAML متوفرة في البيئة، لأن `apply.py` يستوردها؛ لا توجد ملفات متطلبات مثبّتة في هذا المستودع.)
-**فحص التزامن**: `bash scripts/check-workflows-sync.sh` — يتأكد أن `workflows/` و`.github/workflows/` متطابقتان.
+**فحوص الدفعة**: `bash scripts/check-workflows-sync.sh && bash scripts/check-tool-versions.sh` — القيم المثبتة داخل أوامر shell (`GITLEAKS_VERSION` ونسخة Semgrep) مصدرُها الوحيد `scripts/tool-versions.cfg`؛ حدّثه مع الملفين عند كل ترقية.
 
 ## ما الذي تضبطه الأداة؟
 
