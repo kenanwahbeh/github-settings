@@ -71,21 +71,25 @@ def wanted(mode, public):
 def upsert_ruleset(repo, body, dry, keep_checks=False):
     """Create the ruleset, or update the one with the same name."""
     existing = [r for r in gh(f"repos/{repo}/rulesets?includes_parents=false") if r["name"] == body["name"]]
+    request_body = body  # what actually goes on the wire
     if existing and keep_checks:
         # Keep the checks the repository already requires. In --dry-run this
-        # read is allowed, but the kept rules are previewed only — they are
-        # not added to the body that gets printed as the would-be payload.
+        # read is allowed; the kept rules go into a separate preview copy so
+        # the printed PUT payload matches what a real run would send, while
+        # the caller's body stays unmutated.
         current = gh(f"repos/{repo}/rulesets/{existing[0]['id']}")
         kept = [r for r in current["rules"] if r["type"] == "required_status_checks"]
         if dry:
             print(f"  would keep {len(kept)} existing required_status_checks rule(s) on {body['name']}")
+            request_body = json.loads(json.dumps(body))  # deep copy: preview only
+            request_body["rules"] += kept
         else:
             body["rules"] += kept
     if existing:
         return step(f"Ruleset {body['name']} (updated)", lambda: gh(
-            "-X", "PUT", f"repos/{repo}/rulesets/{existing[0]['id']}", body=body, dry_run=dry))
+            "-X", "PUT", f"repos/{repo}/rulesets/{existing[0]['id']}", body=request_body, dry_run=dry))
     return step(f"Ruleset {body['name']}", lambda: gh(
-        "-X", "POST", f"repos/{repo}/rulesets", body=body, dry_run=dry))
+        "-X", "POST", f"repos/{repo}/rulesets", body=request_body, dry_run=dry))
 
 
 def main():

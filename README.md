@@ -39,7 +39,7 @@ uv run apply.py kenanwahbeh/<repository> --check test
 3. إضافة `templates/dependabot.yml` (باسم `.github/dependabot.yml` مع منظومات المشروع) و`templates/SECURITY.md` (للمستودعات العامة) في نفس الـ Pull Request.
 4. الإبلاغ عن بنود "إعدادات حساب لا تتوفر لها API مناسبة" أدناه يدوياً بدل محاولة أتمتتها.
 
-**اختبارات الأداة**: `python3 -m pytest tests/` أو `python3 tests/test_apply.py` — بلا شبكة ولا حاجة لـ `gh`.
+**اختبارات الأداة**: `uv run --with pyyaml python tests/test_apply.py` — بلا شبكة ولا حاجة لـ `gh`. (الأمر المباشر `python3 tests/test_apply.py` يعمل فقط إذا كانت PyYAML متوفرة في البيئة، لأن `apply.py` يستوردها؛ لا توجد ملفات متطلبات مثبّتة في هذا المستودع.)
 **فحص التزامن**: `bash scripts/check-workflows-sync.sh` — يتأكد أن `workflows/` و`.github/workflows/` متطابقتان.
 
 ## ما الذي تضبطه الأداة؟

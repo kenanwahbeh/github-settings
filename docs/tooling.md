@@ -33,6 +33,6 @@
 
 ## أدوات هذا المستودع نفسها
 
-- `apply.py`: تُطبَّق بـ `uv run`؛ اختباراتها: `python3 tests/test_apply.py` (بلا شبكة).
+- `apply.py`: تُطبَّق بـ `uv run`؛ اختباراتها: `uv run --with pyyaml python tests/test_apply.py` (بلا شبكة؛ الأمر المباشر `python3` يتطلب PyYAML في البيئة).
 - `scripts/check-workflows-sync.sh`: فحص تزامن القوالب مع `.github/workflows/`.
 - قائمة أوسع بمراجع الأدوات والنطاقات: [TOOLS_CATALOG.md](TOOLS_CATALOG.md) — وجود أداة في الكتالوج لا يجعلها اعتماداً معمارياً.

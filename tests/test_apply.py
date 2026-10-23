@@ -1,6 +1,7 @@
 """Regression tests for apply.py — no network, no gh binary required.
 
-Run with:  python3 -m pytest tests/   (or: python3 tests/test_apply.py)
+Run with:  uv run --with pyyaml python tests/test_apply.py
+(or inside any environment that already provides PyYAML: python3 tests/test_apply.py)
 """
 
 import json
@@ -71,6 +72,30 @@ class TestUpsertRuleset(unittest.TestCase):
         self.assertIn("(updated)", joined)          # honest preview: update, not create
         self.assertIn("would keep 1 existing", joined)
         self.assertIn("PUT", joined)
+
+    def test_dry_run_preview_payload_contains_retained_checks(self):
+        # Issue #10: the printed PUT payload must match what a real run sends,
+        # i.e. it includes the retained required_status_checks rule...
+        responses = {
+            "repos/o/r/rulesets?includes_parents=false": [{"id": 7, "name": "protect-main"}],
+            "repos/o/r/rulesets/7": {"rules": [{"type": "required_status_checks",
+                                                "parameters": {"required_status_checks":
+                                                               [{"context": "real-check"}]}}]},
+        }
+        body = json.loads(json.dumps(self.BODY))  # deep copy so we can check mutation
+        with mock.patch.object(apply.subprocess, "run", fake_run(responses)), \
+             mock.patch("builtins.print") as out:
+            printed = []
+            out.side_effect = lambda *a, **k: printed.append(" ".join(str(x) for x in a))
+            apply.upsert_ruleset("o/r", body, dry=True, keep_checks=True)
+        joined = "\n".join(printed)
+        payload_line = next(line for line in printed if "would run:" in line and "PUT" in line)
+        payload = json.loads(payload_line[payload_line.index("{"):payload_line.rindex("}") + 1])
+        self.assertEqual(len(payload["rules"]), 2)  # own rule + retained status checks
+        self.assertEqual(payload["rules"][1]["type"], "required_status_checks")
+        self.assertIn("real-check", joined)
+        # ...while the caller's body is NOT mutated by the preview path.
+        self.assertEqual(len(body["rules"]), 1)
 
     def test_missing_ruleset_previews_create(self):
         responses = {"repos/o/r/rulesets?includes_parents=false": []}
