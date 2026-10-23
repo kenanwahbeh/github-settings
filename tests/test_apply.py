@@ -107,6 +107,31 @@ class TestUpsertRuleset(unittest.TestCase):
         self.assertEqual(len(body["rules"]), 1)
 
 
+class TestWriteDetection(unittest.TestCase):
+    """is_write_call() is the safety gate of --dry-run: a missed write would
+    execute against GitHub during a preview. Cases mirror real gh api usage."""
+
+    def test_get_without_body_is_read(self):
+        self.assertFalse(apply.is_write_call(("repos/o/r",), None))
+
+    def test_explicit_get_with_body_stays_read(self):
+        # An explicit -X GET overrides the body-default-to-POST rule.
+        self.assertFalse(apply.is_write_call(("-X", "GET", "repos/o/r/x"), {"q": 1}))
+
+    def test_body_without_x_is_post_write(self):
+        self.assertTrue(apply.is_write_call(("repos/o/r/rulesets",), {"name": "x"}))
+
+    def test_lowercase_method_detected(self):
+        self.assertTrue(apply.is_write_call(("-X", "put", "repos/o/r/x"), None))
+
+    def test_dangling_x_is_not_a_write(self):
+        self.assertFalse(apply.is_write_call(("-X",), None))
+
+    def test_delete_patch_put_post_are_writes(self):
+        for method in ("DELETE", "PATCH", "PUT", "POST"):
+            self.assertTrue(apply.is_write_call(("-X", method, "repos/o/r/x"), None))
+
+
 class TestWantedScope(unittest.TestCase):
     def test_scopes(self):
         self.assertTrue(apply.wanted("all", True))

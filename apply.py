@@ -19,12 +19,26 @@ import yaml
 WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
+def is_write_call(args, body):
+    """True if this gh api call would mutate server state.
+
+    `gh api` defaults to GET; an explicit -X overrides it; passing a body
+    without -X makes gh default to POST. So a call is a write when -X names a
+    write method, or when it carries a body with no explicit -X at all.
+    """
+    try:
+        idx = list(args).index("-X")
+    except ValueError:
+        return body is not None
+    return idx + 1 < len(args) and str(args[idx + 1]).upper() in WRITE_METHODS
+
+
 def gh(*args, body=None, dry_run=False):
     command = ["gh", "api", *args]
     # --dry-run previews every write but still performs reads (GET), so a
     # preview like upsert_ruleset reflects the repository's real current state.
-    is_write = any(args[i] == "-X" and i + 1 < len(args) and args[i + 1].upper() in WRITE_METHODS
-                   for i in range(len(args))) or (body is not None and "-X" not in args)
+    # Requires network + authenticated gh + read access; unit tests mock this.
+    is_write = is_write_call(args, body)
     if dry_run and is_write:
         print("  would run:", " ".join(command), json.dumps(body) if body else "")
         return {}
