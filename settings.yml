@@ -35,6 +35,11 @@ actions:
 # A ruleset on the default branch. Required checks are per repository:
 # pass them with --check, never a name the repository's CI does not report,
 # or nothing can be merged.
+# Ownership policy (branch ruleset): settings.yml owns every rule EXCEPT
+# required_status_checks — when apply.py runs without --check it keeps the
+# checks the repository already requires; with --check the list is rebuilt
+# from the given names. Any other rule added by hand to this ruleset is
+# replaced on the next run.
 ruleset:
   name: main
   block_deletion: true
@@ -45,6 +50,9 @@ ruleset:
   require_signed_commits: true
 
 # A ruleset on release tags: a published version can neither move nor vanish.
+# Ownership policy (tag ruleset): fully owned by settings.yml — no per-repository
+# rules are kept; anything added by hand to this ruleset is replaced on the
+# next run.
 tag_ruleset:
   name: tags
   pattern: "v*"

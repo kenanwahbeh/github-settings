@@ -16,9 +16,16 @@ from pathlib import Path
 import yaml
 
 
+WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
 def gh(*args, body=None, dry_run=False):
     command = ["gh", "api", *args]
-    if dry_run:
+    # --dry-run previews every write but still performs reads (GET), so a
+    # preview like upsert_ruleset reflects the repository's real current state.
+    is_write = any(args[i] == "-X" and i + 1 < len(args) and args[i + 1].upper() in WRITE_METHODS
+                   for i in range(len(args))) or (body is not None and "-X" not in args)
+    if dry_run and is_write:
         print("  would run:", " ".join(command), json.dumps(body) if body else "")
         return {}
     result = subprocess.run(
@@ -51,9 +58,15 @@ def upsert_ruleset(repo, body, dry, keep_checks=False):
     """Create the ruleset, or update the one with the same name."""
     existing = [r for r in gh(f"repos/{repo}/rulesets?includes_parents=false") if r["name"] == body["name"]]
     if existing and keep_checks:
-        # Keep the checks the repository already requires.
+        # Keep the checks the repository already requires. In --dry-run this
+        # read is allowed, but the kept rules are previewed only — they are
+        # not added to the body that gets printed as the would-be payload.
         current = gh(f"repos/{repo}/rulesets/{existing[0]['id']}")
-        body["rules"] += [r for r in current["rules"] if r["type"] == "required_status_checks"]
+        kept = [r for r in current["rules"] if r["type"] == "required_status_checks"]
+        if dry:
+            print(f"  would keep {len(kept)} existing required_status_checks rule(s) on {body['name']}")
+        else:
+            body["rules"] += kept
     if existing:
         return step(f"Ruleset {body['name']} (updated)", lambda: gh(
             "-X", "PUT", f"repos/{repo}/rulesets/{existing[0]['id']}", body=body, dry_run=dry))
