@@ -1,0 +1,40 @@
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression-and-consistency:
+    name: Regression and consistency checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install the test dependency
+        run: python -m pip install --disable-pip-version-check pyyaml
+
+      - name: Compile apply.py
+        run: python -m py_compile apply.py
+
+      - name: Run offline regression tests
+        run: python tests/test_apply.py
+
+      - name: Check workflow template synchronization
+        run: bash scripts/check-workflows-sync.sh
+
+      - name: Check pinned tool versions
+        run: bash scripts/check-tool-versions.sh
