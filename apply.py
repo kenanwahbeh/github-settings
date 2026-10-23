@@ -19,12 +19,26 @@ import yaml
 WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
+def is_write_call(args, body):
+    """True if this gh api call would mutate server state.
+
+    `gh api` defaults to GET; an explicit -X overrides it; passing a body
+    without -X makes gh default to POST. So a call is a write when -X names a
+    write method, or when it carries a body with no explicit -X at all.
+    """
+    try:
+        idx = list(args).index("-X")
+    except ValueError:
+        return body is not None
+    return idx + 1 < len(args) and str(args[idx + 1]).upper() in WRITE_METHODS
+
+
 def gh(*args, body=None, dry_run=False):
     command = ["gh", "api", *args]
     # --dry-run previews every write but still performs reads (GET), so a
     # preview like upsert_ruleset reflects the repository's real current state.
-    is_write = any(args[i] == "-X" and i + 1 < len(args) and args[i + 1].upper() in WRITE_METHODS
-                   for i in range(len(args))) or (body is not None and "-X" not in args)
+    # Requires network + authenticated gh + read access; unit tests mock this.
+    is_write = is_write_call(args, body)
     if dry_run and is_write:
         print("  would run:", " ".join(command), json.dumps(body) if body else "")
         return {}
@@ -54,24 +68,34 @@ def wanted(mode, public):
     return mode == "all" or (mode == "public" and public) or (mode == "private" and not public)
 
 
-def upsert_ruleset(repo, body, dry, keep_checks=False):
-    """Create the ruleset, or update the one with the same name."""
+def upsert_ruleset(repo, body, dry, keep_rules=()):
+    """Create the ruleset, or update the one with the same name.
+
+    Ownership policy (documented in settings.yml): settings.yml owns every
+    rule except the types named in `keep_rules`. On an update those types are
+    read from the live ruleset and appended to the payload, so per-repository
+    additions survive re-apply; everything else returns to the central state.
+    """
     existing = [r for r in gh(f"repos/{repo}/rulesets?includes_parents=false") if r["name"] == body["name"]]
-    if existing and keep_checks:
-        # Keep the checks the repository already requires. In --dry-run this
-        # read is allowed, but the kept rules are previewed only — they are
-        # not added to the body that gets printed as the would-be payload.
+    request_body = body  # what actually goes on the wire
+    if existing and keep_rules:
+        # Keep the rule types the policy exempts. In --dry-run this read is
+        # allowed; the kept rules go into a separate preview copy so the
+        # printed PUT payload matches what a real run would send, while the
+        # caller's body stays unmutated.
         current = gh(f"repos/{repo}/rulesets/{existing[0]['id']}")
-        kept = [r for r in current["rules"] if r["type"] == "required_status_checks"]
+        kept = [r for r in current["rules"] if r["type"] in keep_rules]
         if dry:
-            print(f"  would keep {len(kept)} existing required_status_checks rule(s) on {body['name']}")
+            print(f"  would keep {len(kept)} existing {'/'.join(keep_rules)} rule(s) on {body['name']}")
+            request_body = json.loads(json.dumps(body))  # deep copy: preview only
+            request_body["rules"] += kept
         else:
             body["rules"] += kept
     if existing:
         return step(f"Ruleset {body['name']} (updated)", lambda: gh(
-            "-X", "PUT", f"repos/{repo}/rulesets/{existing[0]['id']}", body=body, dry_run=dry))
+            "-X", "PUT", f"repos/{repo}/rulesets/{existing[0]['id']}", body=request_body, dry_run=dry))
     return step(f"Ruleset {body['name']}", lambda: gh(
-        "-X", "POST", f"repos/{repo}/rulesets", body=body, dry_run=dry))
+        "-X", "POST", f"repos/{repo}/rulesets", body=request_body, dry_run=dry))
 
 
 def main():
@@ -182,7 +206,9 @@ def main():
                 "do_not_enforce_on_create": False,
                 "required_status_checks": [{"context": name} for name in args.check],
             }})
-        ok &= upsert_ruleset(repo, body, dry, keep_checks=not args.check)
+        ok &= upsert_ruleset(
+            repo, body, dry,
+            keep_rules=rules.get("keep_existing_rules", []) if not args.check else [])
 
     tags = settings["tag_ruleset"]
     tag_body = {
@@ -197,7 +223,7 @@ def main():
         tag_body["rules"].append({"type": "deletion"})
     if tags["block_update"]:
         tag_body["rules"].append({"type": "update"})
-    ok &= upsert_ruleset(repo, tag_body, dry)
+    ok &= upsert_ruleset(repo, tag_body, dry, keep_rules=tags.get("keep_existing_rules", []))
 
     sys.exit(0 if ok else 1)
 

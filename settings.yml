@@ -11,6 +11,9 @@ security:
   secret_scanning_push_protection: true
   codeql_default_setup: true
   gitleaks_workflow: private        # workflows/secrets.yml by a pull request: private, all or none
+  # Tool versions inside the workflow shell commands (GITLEAKS_VERSION,
+  # semgrep==) are outside Dependabot's reach: their source of truth is
+  # scripts/tool-versions.cfg, verified by scripts/check-tool-versions.sh.
   semgrep_workflow: private         # workflows/semgrep.yml by a pull request, in place of CodeQL
   private_vulnerability_reporting: public   # public-only feature: public, all or none
   dependabot_version_updates: all   # templates/dependabot.yml by a pull request: all or none
@@ -35,11 +38,11 @@ actions:
 # A ruleset on the default branch. Required checks are per repository:
 # pass them with --check, never a name the repository's CI does not report,
 # or nothing can be merged.
-# Ownership policy (branch ruleset): settings.yml owns every rule EXCEPT
-# required_status_checks — when apply.py runs without --check it keeps the
-# checks the repository already requires; with --check the list is rebuilt
-# from the given names. Any other rule added by hand to this ruleset is
-# replaced on the next run.
+# Ownership policy (branch ruleset): settings.yml owns every rule EXCEPT the
+# types listed in keep_existing_rules — when apply.py runs without --check it
+# keeps those rules from the live ruleset; with --check nothing is kept and
+# the list is rebuilt from the given names. Any other rule added by hand to
+# this ruleset is replaced on the next run.
 ruleset:
   name: main
   block_deletion: true
@@ -48,16 +51,18 @@ ruleset:
   required_approvals: 0
   allowed_merge_methods: [squash]
   require_signed_commits: true
+  keep_existing_rules: [required_status_checks]
 
 # A ruleset on release tags: a published version can neither move nor vanish.
-# Ownership policy (tag ruleset): fully owned by settings.yml — no per-repository
-# rules are kept; anything added by hand to this ruleset is replaced on the
-# next run.
+# Ownership policy (tag ruleset): fully owned by settings.yml — keep_existing_rules
+# is empty on purpose; anything added by hand to this ruleset is replaced on
+# the next run (tested: test_tag_ruleset_does_not_keep_manual_rules).
 tag_ruleset:
   name: tags
   pattern: "v*"
   block_deletion: true
   block_update: true
+  keep_existing_rules: []
 
 # Repositories that keep direct pushes to the default branch.
 ruleset_exclude:

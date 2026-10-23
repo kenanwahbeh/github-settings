@@ -32,6 +32,13 @@ npm audit
 ```
 لا تفترض أن هذه scripts موجودة.
 
+## فحوص هذا المستودع (موجودة فعلاً)
+```bash
+uv run --with pyyaml python tests/test_apply.py     # اختبارات apply.py — بلا شبكة
+bash scripts/check-workflows-sync.sh                # workflows/ == .github/workflows/
+bash scripts/check-tool-versions.sh                 # إصدارات الأدوات داخل shell تطابق scripts/tool-versions.cfg
+```
+
 ## GitHub Actions
 - استخدم أقل صلاحيات لازمة، وأسماء checks ثابتة.
 - شغّل الاختبارات على Pull Requests والفرع الافتراضي.
