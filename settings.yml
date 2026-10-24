@@ -35,14 +35,16 @@ actions:
   # Not enforced: sha_pinning_required. workflows/semgrep.yml accepts actions
   # pinned by version tag on purpose; enable it only after pinning by SHA.
 
-# A ruleset on the default branch. Required checks are per repository:
-# pass them with --check, never a name the repository's CI does not report,
-# or nothing can be merged.
-# Ownership policy (branch ruleset): settings.yml owns every rule EXCEPT the
-# types listed in keep_existing_rules — when apply.py runs without --check it
-# keeps those rules from the live ruleset; with --check nothing is kept and
-# the list is rebuilt from the given names. Any other rule added by hand to
-# this ruleset is replaced on the next run.
+# A ruleset on the default branch. Required checks are repository-specific:
+# pass EVERY desired check with repeated --check flags after verifying the
+# exact check names on a real PR. Supplying --check replaces the complete
+# required_status_checks rule; omitting it preserves the live check rule.
+# For this repository, use the command documented in README.md to include
+# gitleaks, semgrep, and "Regression and consistency checks".
+# Ownership policy: settings.yml owns every rule EXCEPT types listed in
+# keep_existing_rules. Omitting --check keeps the live required_status_checks
+# rule; passing --check replaces it with exactly the supplied names. Other
+# manually-added rule types are replaced on the next run.
 ruleset:
   name: main
   block_deletion: true

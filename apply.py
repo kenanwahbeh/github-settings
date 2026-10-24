@@ -9,6 +9,7 @@
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -16,21 +17,33 @@ from pathlib import Path
 import yaml
 
 
-WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+REPO_SLUG_RE = re.compile(r"^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$")
+
+
+def is_valid_repo_slug(value):
+    """Accept only a plain owner/repository path before interpolating it into API routes."""
+    if not isinstance(value, str) or not REPO_SLUG_RE.fullmatch(value):
+        return False
+    owner, name = value.split("/", 1)
+    return not owner.startswith("-") and not owner.endswith("-") and name not in {".", ".."}
 
 
 def is_write_call(args, body):
-    """True if this gh api call would mutate server state.
+    """Conservatively identify writes before executing a gh api call in dry-run.
 
-    `gh api` defaults to GET; an explicit -X overrides it; passing a body
-    without -X makes gh default to POST. So a call is a write when -X names a
-    write method, or when it carries a body with no explicit -X at all.
+    `gh api` defaults to GET; a body without an explicit method defaults to
+    POST. Only known safe HTTP methods are allowed to execute during a preview.
+    Unknown methods and a malformed dangling -X are treated as writes so a new
+    or malformed verb cannot accidentally mutate GitHub during --dry-run.
     """
     try:
         idx = list(args).index("-X")
     except ValueError:
         return body is not None
-    return idx + 1 < len(args) and str(args[idx + 1]).upper() in WRITE_METHODS
+    if idx + 1 >= len(args):
+        return True
+    return str(args[idx + 1]).upper() not in SAFE_METHODS
 
 
 def gh(*args, body=None, dry_run=False):
@@ -66,6 +79,46 @@ def step(name, action):
 def wanted(mode, public):
     """settings.yml gives a scope: all, public, private or none."""
     return mode == "all" or (mode == "public" and public) or (mode == "private" and not public)
+
+
+def build_branch_ruleset(rules, checks=()):
+    """Build the desired default-branch ruleset from settings and explicit CI checks.
+
+    Passing checks is an explicit replacement policy: callers must provide every
+    check that should block merging. An empty list intentionally omits the
+    required_status_checks rule; upsert_ruleset may preserve the live rule only
+    when configured to keep that rule type.
+    """
+    body = {
+        "name": rules["name"],
+        "target": "branch",
+        "enforcement": "active",
+        "bypass_actors": [],
+        "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
+        "rules": [],
+    }
+    if rules["block_deletion"]:
+        body["rules"].append({"type": "deletion"})
+    if rules["block_force_push"]:
+        body["rules"].append({"type": "non_fast_forward"})
+    if rules["require_signed_commits"]:
+        body["rules"].append({"type": "required_signatures"})
+    if rules["require_pull_request"]:
+        body["rules"].append({"type": "pull_request", "parameters": {
+            "allowed_merge_methods": rules["allowed_merge_methods"],
+            "dismiss_stale_reviews_on_push": False,
+            "require_code_owner_review": False,
+            "require_last_push_approval": False,
+            "required_approving_review_count": rules["required_approvals"],
+            "required_review_thread_resolution": False,
+        }})
+    if checks:
+        body["rules"].append({"type": "required_status_checks", "parameters": {
+            "strict_required_status_checks_policy": False,
+            "do_not_enforce_on_create": False,
+            "required_status_checks": [{"context": name} for name in checks],
+        }})
+    return body
 
 
 def upsert_ruleset(repo, body, dry, keep_rules=()):
@@ -105,6 +158,12 @@ def main():
     parser.add_argument("--check", action="append", default=[], help="a required CI check")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+    if not is_valid_repo_slug(args.repo):
+        parser.error("repo must be a plain owner/repository slug (letters, digits, dots, underscores or hyphens only)")
+    if any(not name.strip() or name != name.strip() for name in args.check):
+        parser.error("each --check must be non-empty and have no leading/trailing whitespace")
+    if len(set(args.check)) != len(args.check):
+        parser.error("duplicate --check values are not allowed")
     settings = yaml.safe_load((Path(__file__).parent / "settings.yml").read_text())
     repo, dry = args.repo, args.dry_run
 
@@ -177,35 +236,7 @@ def main():
     if repo in settings.get("ruleset_exclude", []):
         print(f"• Ruleset {rules['name']}: {repo} is excluded.")
     else:
-        body = {
-            "name": rules["name"],
-            "target": "branch",
-            "enforcement": "active",
-            "bypass_actors": [],
-            "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
-            "rules": [],
-        }
-        if rules["block_deletion"]:
-            body["rules"].append({"type": "deletion"})
-        if rules["block_force_push"]:
-            body["rules"].append({"type": "non_fast_forward"})
-        if rules["require_signed_commits"]:
-            body["rules"].append({"type": "required_signatures"})
-        if rules["require_pull_request"]:
-            body["rules"].append({"type": "pull_request", "parameters": {
-                "allowed_merge_methods": rules["allowed_merge_methods"],
-                "dismiss_stale_reviews_on_push": False,
-                "require_code_owner_review": False,
-                "require_last_push_approval": False,
-                "required_approving_review_count": rules["required_approvals"],
-                "required_review_thread_resolution": False,
-            }})
-        if args.check:
-            body["rules"].append({"type": "required_status_checks", "parameters": {
-                "strict_required_status_checks_policy": False,
-                "do_not_enforce_on_create": False,
-                "required_status_checks": [{"context": name} for name in args.check],
-            }})
+        body = build_branch_ruleset(rules, args.check)
         ok &= upsert_ruleset(
             repo, body, dry,
             keep_rules=rules.get("keep_existing_rules", []) if not args.check else [])

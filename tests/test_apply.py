@@ -167,6 +167,46 @@ class TestUpsertRuleset(unittest.TestCase):
         self.assertNotIn("pull_request", types)          # not exempted: dropped
 
 
+class TestBuildBranchRuleset(unittest.TestCase):
+    def setUp(self):
+        self.settings = apply.yaml.safe_load(
+            (Path(__file__).resolve().parent.parent / "settings.yml").read_text()
+        )["ruleset"]
+
+    def test_baseline_includes_signed_commits_and_pull_requests(self):
+        body = apply.build_branch_ruleset(self.settings)
+        types = [rule["type"] for rule in body["rules"]]
+        self.assertIn("required_signatures", types)
+        self.assertIn("pull_request", types)
+        self.assertIn("deletion", types)
+        self.assertIn("non_fast_forward", types)
+        self.assertNotIn("required_status_checks", types)
+
+    def test_explicit_checks_are_all_added_to_the_ruleset(self):
+        checks = ["gitleaks", "semgrep", "Regression and consistency checks"]
+        body = apply.build_branch_ruleset(self.settings, checks)
+        check_rules = [rule for rule in body["rules"] if rule["type"] == "required_status_checks"]
+        self.assertEqual(len(check_rules), 1)
+        parameters = check_rules[0]["parameters"]
+        self.assertEqual(
+            parameters["required_status_checks"],
+            [{"context": name} for name in checks],
+        )
+        self.assertIn("required_signatures", [rule["type"] for rule in body["rules"]])
+
+    def test_explicit_checks_replace_the_check_list_not_other_rules(self):
+        body = apply.build_branch_ruleset(self.settings, ["actual-ci-check"])
+        self.assertEqual(
+            [rule["type"] for rule in body["rules"]].count("required_status_checks"),
+            1,
+        )
+        self.assertNotIn(
+            "old-check",
+            json.dumps(body),
+        )
+        self.assertIn("required_signatures", [rule["type"] for rule in body["rules"]])
+
+
 class TestWriteDetection(unittest.TestCase):
     """is_write_call() is the safety gate of --dry-run: a missed write would
     execute against GitHub during a preview. Cases mirror real gh api usage."""
@@ -184,12 +224,36 @@ class TestWriteDetection(unittest.TestCase):
     def test_lowercase_method_detected(self):
         self.assertTrue(apply.is_write_call(("-X", "put", "repos/o/r/x"), None))
 
-    def test_dangling_x_is_not_a_write(self):
-        self.assertFalse(apply.is_write_call(("-X",), None))
+    def test_dangling_x_is_treated_as_write_for_safety(self):
+        self.assertTrue(apply.is_write_call(("-X",), None))
 
-    def test_delete_patch_put_post_are_writes(self):
-        for method in ("DELETE", "PATCH", "PUT", "POST"):
+    def test_only_known_safe_methods_execute_in_dry_run(self):
+        for method in ("GET", "HEAD", "OPTIONS", "get", "options"):
+            self.assertFalse(apply.is_write_call(("-X", method, "repos/o/r/x"), None))
+
+    def test_mutating_and_unknown_methods_are_writes(self):
+        for method in ("DELETE", "PATCH", "PUT", "POST", "COPY", "MERGE", "TRACE"):
             self.assertTrue(apply.is_write_call(("-X", method, "repos/o/r/x"), None))
+
+    def test_body_with_explicit_safe_method_is_read(self):
+        self.assertFalse(apply.is_write_call(("-X", "GET", "repos/o/r/x"), {"q": 1}))
+
+
+class TestRepoSlugValidation(unittest.TestCase):
+    def test_valid_repository_slugs(self):
+        for value in ("owner/repo", "owner-1/repo_name", "owner/repo.name", "A/a"):
+            self.assertTrue(apply.is_valid_repo_slug(value), value)
+
+    def test_invalid_repository_slugs_are_rejected(self):
+        for value in ("", "owner", "owner/repo/extra", "/repo", "owner/",
+                      "../repo", "owner/..", "owner/repo?x=1", "owner/repo#x",
+                      "owner/repo\\n", "owner name/repo", "-owner/repo",
+                      "owner/repo\\x"):
+            self.assertFalse(apply.is_valid_repo_slug(value), repr(value))
+
+    def test_github_slug_length_limits(self):
+        self.assertFalse(apply.is_valid_repo_slug("a" * 40 + "/repo"))
+        self.assertFalse(apply.is_valid_repo_slug("owner/" + "a" * 101))
 
 
 class TestWantedScope(unittest.TestCase):
