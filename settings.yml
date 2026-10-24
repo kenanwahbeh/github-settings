@@ -9,7 +9,7 @@ security:
   # (paid add-ons); apply.py then says so, and gitleaks covers the secrets.
   secret_scanning: true
   secret_scanning_push_protection: true
-  codeql_default_setup: true
+  codeql_default_setup: public      # public repos use CodeQL; private repos use Semgrep below
   gitleaks_workflow: private        # workflows/secrets.yml by a pull request: private, all or none
   # Tool versions inside the workflow shell commands (GITLEAKS_VERSION,
   # semgrep==) are outside Dependabot's reach: their source of truth is
