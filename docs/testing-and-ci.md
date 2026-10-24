@@ -36,6 +36,7 @@ npm audit
 ```bash
 uv run --with pyyaml python tests/test_apply.py     # اختبارات apply.py — بلا شبكة
 bash scripts/check-workflows-sync.sh                # workflows/ == .github/workflows/
+uv run --with pyyaml python scripts/check-action-pins.py # مراجع Actions الخارجية المباشرة مثبتة
 bash scripts/check-tool-versions.sh                 # إصدارات الأدوات داخل shell تطابق scripts/tool-versions.cfg
 ```
 

@@ -1,4 +1,4 @@
-# توصيات GitHub لمطوّر يعمل وحده
+# سياسة تجهيز مستودعات GitHub
 
 مرجع لما يمكن ضبطه على أي مستودع جديد، وما يغطيه `apply.py` اليوم وما لا يغطيه. مصدره توثيق GitHub (docs.github.com) في تشرين الأول 2026. ما لم أتحقق منه بنفسي مكتوب «غير مؤكد».
 
@@ -6,15 +6,15 @@
 
 ## 1. حماية الفرع `main` (ruleset)
 
-| القاعدة | الحالة | ملاحظة لمن يعمل وحده |
+| القاعدة | الحالة | السياسة والنطاق |
 |---|---|---|
 | منع الحذف `deletion` | ✅ | |
 | منع force push `non_fast_forward` | ✅ | |
-| كل تغيير بـ pull request، بلا موافقات (0) | ✅ | الموافقة على عملك مستحيلة وحدك، فتبقى 0. فائدة الـ PR هنا هي تشغيل الفحوص قبل الدمج. |
-| فحوص CI مطلوبة `required_status_checks` | تتطلب مزامنة حية | `apply.py --check` يستبدل قائمة الفحوص كاملة؛ يجب تمرير كل الأسماء المطلوبة والتحقق منها في Pull Request. في التدقيق الحي الأخير لم يكن فحص الاختبارات/الاتساق مطلوباً. |
-| تواقيع موثّقة `required_signatures` | مفعّلة في الحالة المطلوبة؛ غير متحققة في ruleset الحي | `settings.yml` و`apply.py` يطلبان القاعدة، لكن التدقيق الحي لم يجدها في ruleset `main`. إعداد مفتاح التوقيع في README لا يثبت أن كل commit موقّع، والقاعدة لا تعيد توقيع التاريخ السابق؛ يجب تطبيقها والتحقق منها. |
+| كل تغيير بـ pull request، بلا موافقات (0) | ✅ | العدد قابل للضبط لكل مستودع؛ لا تعمم صفر موافقات على جميع عملاء المنتج. تبقى الموافقة على الدمج منفصلة عن نتيجة الآلة. |
+| فحوص CI مطلوبة `required_status_checks` | ✅ بأسماء فعلية | تُستبدل الأسماء عند --check مع حفظ السياسة الحية وربط المصادر للأسماء الباقية. الفرع يجب أن يكون محدثاً. |
+| تواقيع موثّقة `required_signatures` | ✅ | تحققت في ruleset المرجع؛ يعاد التحقق في كل مستودع هدف بعد التطبيق. |
 | تاريخ خطي `required_linear_history` | ⚖ | يفرض squash أو rebase فقط. يعطي سجلاً نظيفاً، ويتطلب أن يسمح المستودع بأحدهما. |
-| نتائج code scanning `code_scanning` | ➕ للعام فقط | يمنع الدمج إن وُجدت ثغرة بدرجة محددة. CodeQL مجاني للمستودع العام فقط. |
+| نتائج code scanning `code_scanning` | ✅ قابلة للضبط | CodeQL للعام وفق السياسة الحالية، أخطاء وHigh/Critical؛ يلزم تحليل ناجح على الفرع الافتراضي قبل فرض الأداة. |
 | حل تنبيهات الأسرار `secret_scanning` | ⚖ | معاينة عامة (public preview) في التوثيق. |
 | `bypass_actors` | ✅ فارغ | حتى المالك لا يدفع مباشرة. وفي الطوارئ تعدّل الـ ruleset من الإعدادات ثم تعيده. |
 
@@ -28,7 +28,7 @@
 | Dependabot security updates | ✅ | |
 | **Dependabot version updates** (`.github/dependabot.yml`) | ✅ قالب | `templates/dependabot.yml`، يُضاف بـ PR. أهمها نظام `github-actions` لتحديث الـ Actions، مع `groups` و`cooldown` لتقليل الضجيج. |
 | Secret scanning + push protection | ✅ للعام، يُجرَّب للخاص | إضافة مدفوعة في الخاص، وبديله gitleaks |
-| CodeQL (default setup) | ✅ للعام، يُجرَّب للخاص | بديله في الخاص Semgrep |
+| CodeQL (default setup) | ✅ للعام وفق الضبط | الخاص يحتاج أداة وخطة متاحتين؛ يمكن استخدام Semgrep كفحص CI |
 | حذف الفرع بعد الدمج، والدمج التلقائي | ✅ | |
 | السماح بطريقة دمج واحدة (squash فقط) | ✅ | `allow_squash_merge` و`allow_merge_commit` و`allow_rebase_merge` في `PATCH repos/{repo}` |
 | تعطيل ما لا تستعمله (wiki، projects) | ⚖ | `has_wiki` و`has_projects` |
@@ -44,7 +44,7 @@
 |---|---|---|
 | صلاحيات `GITHUB_TOKEN` الافتراضية | `PUT repos/{repo}/actions/permissions/workflow` | `default_workflow_permissions: read` و`can_approve_pull_request_reviews: false` ✅ |
 | موافقة تشغيل PR من الخارج | `PUT .../actions/permissions/fork-pr-contributor-approval` | `all_external_contributors` ✅ |
-| فرض تثبيت الـ Actions بـ SHA | `PUT repos/{repo}/actions/permissions` (`sha_pinning_required`) | ⚖ انتبه: قالب Semgrep هنا يقبل التثبيت بالوسم عمداً. فعّله فقط إن ثبّتَّ بالـ SHA وتركت Dependabot يحدّثها. |
+| فرض تثبيت Actions بـSHA | `PUT repos/{repo}/actions/permissions` | مبرمج في المرحلة الأولى؛ يُفعّل حياً بعد دمج الملفات المثبتة وفحصها في المرحلة الثانية. |
 | قائمة الـ Actions المسموحة | `PUT .../actions/permissions/selected-actions` | ⚖ |
 
 داخل ملفات الـ workflow:
@@ -80,7 +80,7 @@ uv run apply.py kenanwahbeh/github-settings --check gitleaks --check semgrep --c
 ## 6. ما هو مبرمج وما هو مطبّق فعلياً وما بقي
 
 - **في الكود والإعدادات:** يبني `apply.py` قاعدة `required_signatures` عندما يكون `require_signed_commits: true`، ويبني فحوص CI المطلوبة فقط من الأسماء الممررة عبر `--check`.
-- **حالة GitHub الحية التي فُحصت في 2026-10-24:** ruleset `main` لا يحتوي `required_signatures`؛ كما أن `Regression and consistency checks` ليس ضمن الفحوص المطلوبة، رغم نجاحه في التشغيل. كانت الفحوص المطلوبة الظاهرة هي `gitleaks` و`semgrep`. لذلك لا يصح وصف هاتين الحمايتين بأنهما مطبقتان بالكامل قبل إعادة التطبيق والتحقق.
+- **الحالة الحية السابقة:** تحققت التواقيع والفحوص الثلاثة مع strict=true ومصدر GitHub Actions. إعدادات SHA وحل محادثات المراجعة وCode scanning الجديدة تحتاج تطبيق المرحلة الثانية والتحقق، ولا توصف بأنها مفعلة لمجرد وجودها في الملفات.
 - **التوقيع:** إعداد مفتاح SSH يشرح طريقة الإعداد فقط؛ لا يثبت أن كل commits التاريخية موقعة. `required_signatures` يفرض شرط التوقيع على التحديثات التي يغطيها ruleset بعد تفعيله، ولا يغيّر توقيعات التاريخ السابق.
-- **تثبيت Actions بـ SHA:** لم يُفرض حتى الآن؛ القوالب تقبل وسوم الإصدارات وتستثني قاعدة Semgrep الخاصة بالوسوم المتحركة. هذا قرار مخاطرة مقصود لتسهيل التحديث، وليس ضماناً مكافئاً للتثبيت بـ SHA. إذا تقرر فرض SHA لاحقاً، يجب تثبيت كل Actions في القوالب والنسخ العاملة وتحديث Dependabot وفحوص الاتساق معاً.
+- **تثبيت Actions بـSHA:** مراجع القوالب والنسخ العاملة مثبتة، وأزيل استثناء Semgrep للوسوم. فحص دائم في CI يمنع عودة مراجع متحركة. يجب مزامنة القوالب عند تحديث Dependabot قبل دمج التحديث، وتفعيل سياسة المنع بعد وصول الملفات إلى main.
 - **غير مؤكد:** توافر/تفعيل immutable releases في الحساب لم يُتحقق منه.
