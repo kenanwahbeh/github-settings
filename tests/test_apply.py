@@ -224,12 +224,36 @@ class TestWriteDetection(unittest.TestCase):
     def test_lowercase_method_detected(self):
         self.assertTrue(apply.is_write_call(("-X", "put", "repos/o/r/x"), None))
 
-    def test_dangling_x_is_not_a_write(self):
-        self.assertFalse(apply.is_write_call(("-X",), None))
+    def test_dangling_x_is_treated_as_write_for_safety(self):
+        self.assertTrue(apply.is_write_call(("-X",), None))
 
-    def test_delete_patch_put_post_are_writes(self):
-        for method in ("DELETE", "PATCH", "PUT", "POST"):
+    def test_only_known_safe_methods_execute_in_dry_run(self):
+        for method in ("GET", "HEAD", "OPTIONS", "get", "options"):
+            self.assertFalse(apply.is_write_call(("-X", method, "repos/o/r/x"), None))
+
+    def test_mutating_and_unknown_methods_are_writes(self):
+        for method in ("DELETE", "PATCH", "PUT", "POST", "COPY", "MERGE", "TRACE"):
             self.assertTrue(apply.is_write_call(("-X", method, "repos/o/r/x"), None))
+
+    def test_body_with_explicit_safe_method_is_read(self):
+        self.assertFalse(apply.is_write_call(("-X", "GET", "repos/o/r/x"), {"q": 1}))
+
+
+class TestRepoSlugValidation(unittest.TestCase):
+    def test_valid_repository_slugs(self):
+        for value in ("owner/repo", "owner-1/repo_name", "owner/repo.name", "A/a"):
+            self.assertTrue(apply.is_valid_repo_slug(value), value)
+
+    def test_invalid_repository_slugs_are_rejected(self):
+        for value in ("", "owner", "owner/repo/extra", "/repo", "owner/",
+                      "../repo", "owner/..", "owner/repo?x=1", "owner/repo#x",
+                      "owner/repo\\n", "owner name/repo", "-owner/repo",
+                      "owner/repo\\x"):
+            self.assertFalse(apply.is_valid_repo_slug(value), repr(value))
+
+    def test_github_slug_length_limits(self):
+        self.assertFalse(apply.is_valid_repo_slug("a" * 40 + "/repo"))
+        self.assertFalse(apply.is_valid_repo_slug("owner/" + "a" * 101))
 
 
 class TestWantedScope(unittest.TestCase):
