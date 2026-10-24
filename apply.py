@@ -138,7 +138,7 @@ def main():
 
     if analysis:
         ok &= step("Secret scanning and push protection", secret_scanning)
-    if security["codeql_default_setup"]:
+    if wanted(security["codeql_default_setup"], public):
         ok &= step("CodeQL default setup", lambda: gh(
             "-X", "PATCH", f"repos/{repo}/code-scanning/default-setup", body={"state": "configured"}, dry_run=dry))
     if wanted(security["private_vulnerability_reporting"], public):
