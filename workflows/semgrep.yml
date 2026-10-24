@@ -1,6 +1,5 @@
 name: semgrep
 
-# TEMPORARY TEST: intentional mismatch to verify required check enforcement.
 # Code scanning on the free rules, in place of CodeQL, which a private
 # repository does not get on GitHub Pro. Fails on any finding.
 # Pick the rule packs for the repository's languages (semgrep.dev/explore):
