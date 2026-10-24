@@ -167,6 +167,46 @@ class TestUpsertRuleset(unittest.TestCase):
         self.assertNotIn("pull_request", types)          # not exempted: dropped
 
 
+class TestBuildBranchRuleset(unittest.TestCase):
+    def setUp(self):
+        self.settings = apply.yaml.safe_load(
+            (Path(__file__).resolve().parent.parent / "settings.yml").read_text()
+        )["ruleset"]
+
+    def test_baseline_includes_signed_commits_and_pull_requests(self):
+        body = apply.build_branch_ruleset(self.settings)
+        types = [rule["type"] for rule in body["rules"]]
+        self.assertIn("required_signatures", types)
+        self.assertIn("pull_request", types)
+        self.assertIn("deletion", types)
+        self.assertIn("non_fast_forward", types)
+        self.assertNotIn("required_status_checks", types)
+
+    def test_explicit_checks_are_all_added_to_the_ruleset(self):
+        checks = ["gitleaks", "semgrep", "Regression and consistency checks"]
+        body = apply.build_branch_ruleset(self.settings, checks)
+        check_rules = [rule for rule in body["rules"] if rule["type"] == "required_status_checks"]
+        self.assertEqual(len(check_rules), 1)
+        parameters = check_rules[0]["parameters"]
+        self.assertEqual(
+            parameters["required_status_checks"],
+            [{"context": name} for name in checks],
+        )
+        self.assertIn("required_signatures", [rule["type"] for rule in body["rules"]])
+
+    def test_explicit_checks_replace_the_check_list_not_other_rules(self):
+        body = apply.build_branch_ruleset(self.settings, ["actual-ci-check"])
+        self.assertEqual(
+            [rule["type"] for rule in body["rules"]].count("required_status_checks"),
+            1,
+        )
+        self.assertNotIn(
+            "old-check",
+            json.dumps(body),
+        )
+        self.assertIn("required_signatures", [rule["type"] for rule in body["rules"]])
+
+
 class TestWriteDetection(unittest.TestCase):
     """is_write_call() is the safety gate of --dry-run: a missed write would
     execute against GitHub during a preview. Cases mirror real gh api usage."""
