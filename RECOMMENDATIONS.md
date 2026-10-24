@@ -11,8 +11,8 @@
 | منع الحذف `deletion` | ✅ | |
 | منع force push `non_fast_forward` | ✅ | |
 | كل تغيير بـ pull request، بلا موافقات (0) | ✅ | الموافقة على عملك مستحيلة وحدك، فتبقى 0. فائدة الـ PR هنا هي تشغيل الفحوص قبل الدمج. |
-| فحوص CI مطلوبة `required_status_checks` | ✅ بـ `--check` | باسم فحص يظهر فعلاً، وإلا يتعطل الدمج. |
-| تواقيع موثّقة `required_signatures` | ✅ | أنت توقّع كل commits أصلاً (README). commits واجهة GitHub وDependabot موقّعة من GitHub فلا تنكسر. أما commits وكلاء الذكاء الاصطناعي على جهازك فتُوقَّع بمفتاحك. |
+| فحوص CI مطلوبة `required_status_checks` | تتطلب مزامنة حية | `apply.py --check` يستبدل قائمة الفحوص كاملة؛ يجب تمرير كل الأسماء المطلوبة والتحقق منها في Pull Request. في التدقيق الحي الأخير لم يكن فحص الاختبارات/الاتساق مطلوباً. |
+| تواقيع موثّقة `required_signatures` | مفعّلة في الحالة المطلوبة؛ غير متحققة في ruleset الحي | `settings.yml` و`apply.py` يطلبان القاعدة، لكن التدقيق الحي لم يجدها في ruleset `main`. إعداد مفتاح التوقيع في README لا يثبت أن كل commit موقّع، والقاعدة لا تعيد توقيع التاريخ السابق؛ يجب تطبيقها والتحقق منها. |
 | تاريخ خطي `required_linear_history` | ⚖ | يفرض squash أو rebase فقط. يعطي سجلاً نظيفاً، ويتطلب أن يسمح المستودع بأحدهما. |
 | نتائج code scanning `code_scanning` | ➕ للعام فقط | يمنع الدمج إن وُجدت ثغرة بدرجة محددة. CodeQL مجاني للمستودع العام فقط. |
 | حل تنبيهات الأسرار `secret_scanning` | ⚖ | معاينة عامة (public preview) في التوثيق. |
@@ -62,17 +62,25 @@
 - فعّل الإعدادات الافتراضية للمستودعات الجديدة من https://github.com/settings/security_analysis (مذكور في `README.md`).
 - Immutable releases (إصدارات لا تتغير بعد النشر): ميزة جديدة، وصفحة توثيقها لم أستطع قراءتها، فهي **غير مؤكدة**. ابحث عنها في إعدادات المستودع قبل الاعتماد عليها.
 
-## 5. ترتيب العمل لمستودع جديد
+## 5. خطوات التطبيق والتحقق
 
-1. `uv run apply.py kenanwahbeh/<repo> --dry-run` ثم بدون `--dry-run`.
-2. مستودع خاص: أضف `secrets.yml` و`semgrep.yml` بـ PR، ثم أعد التطبيق مع `--check gitleaks --check semgrep` وفحوص CI الأخرى.
-3. أضف `dependabot.yml` و`SECURITY.md` (العام) بـ PR.
-4. راجع القائمة اليدوية أعلاه إن كان جهازاً أو حساباً جديداً.
+1. شغّل `uv run apply.py <owner/repo> --dry-run` وراجع كل عملية كتابة في المعاينة.
+2. تحقّق من أسماء checks في Pull Request حقيقي؛ لا تنسخ أسماء من وثيقة أو من تشغيل قديم.
+3. عند تمرير `--check`، اذكر **كل** الفحوص المطلوبة في القائمة النهائية. لا تمرّر فحصاً واحداً على افتراض أن الأداة ستضيفه إلى الفحوص الحية؛ القائمة تُستبدل.
+4. بعد التطبيق، افحص صفحة **Settings → Rules → ruleset** وتأكد من القواعد الفعلية، ثم افتح Pull Request تجريبياً للتأكد أن الفحوص المطلوبة تظهر وتمنع الدمج عند فشلها.
+5. أضف `dependabot.yml` و`SECURITY.md` (للعام) بـ PR، وراجع عناصر الحساب اليدوية.
 
-## 6. ما نُفِّذ وما بقي
+لهذا المستودع تحديداً، وبعد تأكيد الأسماء الفعلية، الأمر الكامل هو:
 
-نُفِّذ في `apply.py` و`settings.yml`: التواقيع، ruleset الوسوم، صلاحيات الـ Actions وموافقة الـ forks، طريقة دمج واحدة (squash)، Private vulnerability reporting للعام. وأُضيف قالبا `templates/dependabot.yml` و`templates/SECURITY.md`.
+```bash
+uv run apply.py kenanwahbeh/github-settings --dry-run --check gitleaks --check semgrep --check "Regression and consistency checks"
+uv run apply.py kenanwahbeh/github-settings --check gitleaks --check semgrep --check "Regression and consistency checks"
+```
 
-لم يُنفَّذ عمداً: `sha_pinning_required` (يتعارض مع قالب Semgrep الذي يقبل التثبيت بالوسم)، و`required_linear_history` (squash فقط يعطي النتيجة نفسها تقريباً).
+## 6. ما هو مبرمج وما هو مطبّق فعلياً وما بقي
 
-غير مؤكد: Immutable releases.
+- **في الكود والإعدادات:** يبني `apply.py` قاعدة `required_signatures` عندما يكون `require_signed_commits: true`، ويبني فحوص CI المطلوبة فقط من الأسماء الممررة عبر `--check`.
+- **حالة GitHub الحية التي فُحصت في 2026-10-24:** ruleset `main` لا يحتوي `required_signatures`؛ كما أن `Regression and consistency checks` ليس ضمن الفحوص المطلوبة، رغم نجاحه في التشغيل. كانت الفحوص المطلوبة الظاهرة هي `gitleaks` و`semgrep`. لذلك لا يصح وصف هاتين الحمايتين بأنهما مطبقتان بالكامل قبل إعادة التطبيق والتحقق.
+- **التوقيع:** إعداد مفتاح SSH يشرح طريقة الإعداد فقط؛ لا يثبت أن كل commits التاريخية موقعة. `required_signatures` يفرض شرط التوقيع على التحديثات التي يغطيها ruleset بعد تفعيله، ولا يغيّر توقيعات التاريخ السابق.
+- **تثبيت Actions بـ SHA:** لم يُفرض حتى الآن؛ القوالب تقبل وسوم الإصدارات وتستثني قاعدة Semgrep الخاصة بالوسوم المتحركة. هذا قرار مخاطرة مقصود لتسهيل التحديث، وليس ضماناً مكافئاً للتثبيت بـ SHA. إذا تقرر فرض SHA لاحقاً، يجب تثبيت كل Actions في القوالب والنسخ العاملة وتحديث Dependabot وفحوص الاتساق معاً.
+- **غير مؤكد:** توافر/تفعيل immutable releases في الحساب لم يُتحقق منه.
