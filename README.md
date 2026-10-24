@@ -26,7 +26,16 @@ uv run apply.py kenanwahbeh/<repository>
 uv run apply.py kenanwahbeh/<repository> --check test
 ```
 
-ابدأ بـ `--dry-run` لمراجعة التغييرات؛ في هذا الوضع تنفّذ الأداة عمليات القراءة فقط وتعرض عمليات الكتابة دون تنفيذها (يتطلب اتصالاً و`gh` مصادقاً عليه وصلاحيات قراءة). أضف `--check` فقط باسم فحص CI يظهر فعلاً في المستودع؛ الاسم غير الموجود قد يمنع دمج الـ Pull Requests. إذا كان هناك ruleset باسم `main` يطلب فحوصاً، يحافظ التطبيق على الفحوص الحالية عند عدم تمرير `--check`. سياسة ملكية القواعد موثّقة في تعليقات `settings.yml`: الفرع يستثني `required_status_checks` فقط، وقواعد الوسوم تملكها `settings.yml` بالكامل.
+ابدأ بـ `--dry-run` لمراجعة التغييرات؛ في هذا الوضع تنفّذ الأداة عمليات القراءة فقط وتعرض عمليات الكتابة دون تنفيذها (يتطلب اتصالاً و`gh` مصادقاً عليه وصلاحيات قراءة). لا تمرّر `--check` إلا بأسماء فحوص CI ظهرت فعلاً في نتائج Pull Request، لأن الاسم الخاطئ قد يمنع الدمج. عند تمرير `--check` تصبح القائمة التي تمرّرها هي **القائمة الكاملة** للفحوص المطلوبة، وليست إضافة إلى القائمة الحية؛ لذلك أعد ذكر كل فحص تريد الإبقاء عليه. عند عدم تمريرها، يحافظ التطبيق على قاعدة الفحوص الحية كما هي. أما توقيع commits فيُضاف كقاعدة `required_signatures` إلى الحالة المطلوبة، لكنه لا يصبح مفروضاً على GitHub إلا بعد تطبيق القواعد والتحقق من ruleset الحي.
+
+**مزامنة قواعد الحماية لهذا المستودع نفسه:** أسماء الفحوص التي يجب أن تمنع الدمج هي `gitleaks` و`semgrep` و`Regression and consistency checks`. بعد التحقق من ظهورها في Checks، راجع المعاينة ثم طبّقها بالأمر التالي؛ هذا يستبدل قائمة الفحوص المطلوبة بهذه الثلاثة مع الاحتفاظ ببقية قواعد الحماية التي يبنيها الإعداد:
+
+```bash
+uv run apply.py kenanwahbeh/github-settings --dry-run --check gitleaks --check semgrep --check "Regression and consistency checks"
+uv run apply.py kenanwahbeh/github-settings --check gitleaks --check semgrep --check "Regression and consistency checks"
+```
+
+لا تعتبر التوقيعات أو الفحوص مفروضة لمجرد وجودها في `settings.yml`: بعد التطبيق، افتح **Settings → Rules → main** وتحقق من وجود `required_signatures` ومن قائمة الفحوص الثلاثة. سياسة ملكية القواعد موثّقة في تعليقات `settings.yml`: يستثني الفرع قاعدة `required_status_checks` من الاستبدال فقط عندما لا تمرر `--check`؛ أما قواعد الوسوم فتملكها `settings.yml` بالكامل.
 
 **ملاحظة عن قوالب workflows:** `workflows/` هي القوالب التي تُنسخ إلى المستودعات المستهدفة، أما `.github/workflows/` فهي نسخة هذا المستودع العاملة لحماية نفسه بهما. يجب أن يبقى كل زوج متطابقاً؛ فحص `scripts/check-workflows-sync.sh` يمنع الانحراف. إصدارات الأدوات المكتوبة داخل أوامر shell (`GITLEAKS_VERSION`، ونسخة Semgrep في سطر `uvx`) لا يحدّثها Dependabot — قيمها مثبتة في `scripts/tool-versions.cfg` ويُحدَّث الملفان معاً عنده ثم يُتحقق بـ `scripts/check-tool-versions.sh`.
 
