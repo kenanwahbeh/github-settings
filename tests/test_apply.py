@@ -6,6 +6,7 @@ Run with:  uv run --with pyyaml python tests/test_apply.py
 
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -347,6 +348,12 @@ class TestMainFlow(unittest.TestCase):
         def respond(*args, **kwargs):
             if args == ("repos/o/r",):
                 return {"private": private}
+            if args[0].endswith("code-scanning/analyses?per_page=100"):
+                return [{"tool": {"name": "CodeQL"}, "ref": "refs/heads/main", "error": ""}]
+            if args[0].endswith("actions/permissions") and len(args) == 1:
+                return {"enabled": True, "allowed_actions": "all"}
+            if args[0].endswith("actions/workflows?per_page=100"):
+                return {"total_count": 0, "workflows": []}
             if args[0].endswith("rulesets?includes_parents=false"):
                 if fail_rules:
                     raise RuntimeError("ruleset read denied")
@@ -397,14 +404,138 @@ class TestMainFlow(unittest.TestCase):
     def test_dry_run_cli_never_executes_write_subprocesses(self):
         def respond(command, **kwargs):
             self.assertNotIn("-X", command)
-            payload = {"private": False} if command[-1] == "repos/o/r" else []
+            endpoint = command[-1]
+            if endpoint == "repos/o/r":
+                payload = {"private": False}
+            elif endpoint.endswith("code-scanning/analyses?per_page=100"):
+                payload = [{"tool": {"name": "CodeQL"}, "ref": "refs/heads/main", "error": ""}]
+            elif endpoint.endswith("actions/permissions"):
+                payload = {"enabled": True, "allowed_actions": "all"}
+            elif endpoint.endswith("actions/workflows?per_page=100"):
+                payload = {"total_count": 0, "workflows": []}
+            else:
+                payload = []
             return mock.Mock(returncode=0, stdout=json.dumps(payload))
         with mock.patch.object(sys, "argv", ["apply.py", "o/r", "--dry-run", "--check", "real"]), \
              mock.patch.object(apply.subprocess, "run", side_effect=respond) as run, \
              mock.patch("builtins.print"), self.assertRaises(SystemExit) as stopped:
             apply.main()
         self.assertEqual(stopped.exception.code, 0)
-        self.assertEqual(run.call_count, 3)
+        self.assertEqual(run.call_count, 6)
+
+
+    def test_repository_specific_settings_file(self):
+        settings = apply.yaml.safe_load((Path(apply.__file__).parent / "settings.yml").read_text())
+        settings["ruleset"]["required_approvals"] = 2
+        settings["ruleset"]["code_scanning"]["scope"] = "none"
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "policy.yml"
+            path.write_text(apply.yaml.safe_dump(settings), encoding="utf-8")
+            code, calls, _ = self.run_main(self.responder(), "--settings", str(path))
+        self.assertEqual(code, 0)
+        branch = next(call.kwargs["body"] for call in calls
+                      if call.kwargs.get("body", {}).get("name") == "main")
+        review = next(r["parameters"] for r in branch["rules"] if r["type"] == "pull_request")
+        self.assertEqual(review["required_approving_review_count"], 2)
+        self.assertNotIn("code_scanning", [r["type"] for r in branch["rules"]])
+
+
+class TestSecurityPolicy(unittest.TestCase):
+    def setUp(self):
+        self.rules = apply.yaml.safe_load((Path(apply.__file__).parent / "settings.yml").read_text())["ruleset"]
+
+    def test_review_controls_are_configurable(self):
+        body = apply.build_branch_ruleset(self.rules)
+        review = next(r["parameters"] for r in body["rules"] if r["type"] == "pull_request")
+        self.assertTrue(review["required_review_thread_resolution"])
+        self.assertTrue(review["dismiss_stale_reviews_on_push"])
+        self.assertEqual(review["required_approving_review_count"], 0)
+        changed = dict(self.rules, required_approvals=1, require_code_owner_review=True)
+        review = next(r["parameters"] for r in apply.build_branch_ruleset(changed)["rules"]
+                      if r["type"] == "pull_request")
+        self.assertEqual(review["required_approving_review_count"], 1)
+        self.assertTrue(review["require_code_owner_review"])
+
+    def test_code_scanning_scopes_and_thresholds(self):
+        public = apply.build_branch_ruleset(self.rules, public=True)
+        scanning = next(r for r in public["rules"] if r["type"] == "code_scanning")
+        self.assertEqual(scanning["parameters"]["code_scanning_tools"], [{
+            "tool": "CodeQL", "alerts_threshold": "errors", "security_alerts_threshold": "high_or_higher"}])
+        self.assertNotIn("code_scanning", [r["type"] for r in
+                         apply.build_branch_ruleset(self.rules, public=False)["rules"]])
+
+    def test_action_reference_detection(self):
+        sha = "a" * 40
+        document = {"jobs": {"test": {"steps": [
+            {"uses": "actions/checkout@" + sha}, {"uses": "./.github/actions/local"},
+            {"uses": "docker://example/image@sha256:" + "b" * 64},
+            {"uses": "actions/checkout@v7"}], "run": "echo uses: harmless"},
+            "reused": {"uses": "owner/repo/.github/workflows/test.yml@main"}}}
+        self.assertEqual(apply.unpinned_action_refs(document), [
+            "actions/checkout@v7", "owner/repo/.github/workflows/test.yml@main"])
+
+    def test_enforcement_keeps_permissions_and_validates_default_branch(self):
+        content = apply.base64.b64encode(b"jobs: {test: {steps: [{uses: 'actions/checkout@" +
+                                        b"a" * 40 + b"'}]}}").decode()
+        responses = [{"enabled": True, "allowed_actions": "selected", "sha_pinning_required": False},
+                     {"total_count": 1, "workflows": [{"path": ".github/workflows/test.yml"}]},
+                     {"content": content}, {}]
+        with mock.patch.object(apply, "gh", side_effect=responses) as gh:
+            apply.set_action_sha_pinning("o/r", True, "release/main", True)
+        self.assertIn("ref=release%2Fmain", gh.call_args_list[2].args[0])
+        self.assertEqual(gh.call_args.kwargs["body"], {
+            "enabled": True, "allowed_actions": "selected", "sha_pinning_required": True})
+        self.assertTrue(gh.call_args.kwargs["dry_run"])
+
+    def test_mutable_workflow_blocks_enforcement(self):
+        content = apply.base64.b64encode(b"jobs: {test: {uses: 'owner/repo/test.yml@main'}}").decode()
+        with mock.patch.object(apply, "gh", side_effect=[
+                {"enabled": True}, {"total_count": 1, "workflows": [{"path": ".github/workflows/test.yml"}]},
+                {"content": content}]) as gh:
+            with self.assertRaisesRegex(RuntimeError, "SHA pinning not enabled"):
+                apply.set_action_sha_pinning("o/r", True, "main", False)
+        self.assertEqual(gh.call_count, 3)
+        self.assertFalse(any(call.args[0] == "-X" for call in gh.call_args_list))
+
+    def test_incomplete_workflow_list_blocks_enforcement(self):
+        with mock.patch.object(apply, "gh", side_effect=[{"enabled": True}, {"total_count": 101}]):
+            with self.assertRaisesRegex(RuntimeError, "all pages"):
+                apply.set_action_sha_pinning("o/r", True, "main", False)
+
+
+class TestScanningPreflight(unittest.TestCase):
+    BODY = {"name": "main", "rules": [{"type": "code_scanning", "parameters": {
+        "code_scanning_tools": [{"tool": "CodeQL", "alerts_threshold": "errors",
+                                 "security_alerts_threshold": "high_or_higher"}]}}]}
+
+    def test_successful_scan_on_default_branch_is_accepted(self):
+        with mock.patch.object(apply, "gh", return_value=[{
+                "tool": {"name": "CodeQL"}, "ref": "refs/heads/release", "error": ""}]):
+            apply.validate_code_scanning_tools("o/r", self.BODY, "release")
+
+    def test_missing_failed_or_other_branch_scan_prevents_ruleset_write(self):
+        for analyses in ([], [{"tool": {"name": "CodeQL"}, "ref": "refs/heads/main", "error": "failed"}],
+                         [{"tool": {"name": "CodeQL"}, "ref": "refs/heads/feature", "error": ""}]):
+            with mock.patch.object(apply, "gh", return_value=analyses) as gh:
+                self.assertFalse(apply.upsert_ruleset("o/r", self.BODY, False))
+            self.assertEqual(gh.call_count, 1)
+            self.assertNotEqual(gh.call_args.args[0], "-X")
+
+    def test_policy_without_scanning_does_not_query_analyses(self):
+        with mock.patch.object(apply, "gh") as gh:
+            apply.validate_code_scanning_tools("o/r", {"rules": []}, "main")
+        gh.assert_not_called()
+
+
+    def test_existing_scanning_rule_is_retained_when_not_replaced(self):
+        body = {"name": "main", "rules": [{"type": "required_status_checks", "parameters": {
+            "required_status_checks": [{"context": "real-check"}],
+            "strict_required_status_checks_policy": True}}]}
+        previous = self.BODY["rules"][0]
+        with mock.patch.object(apply, "gh", side_effect=[
+                [{"id": 7, "name": "main"}], {"rules": [previous]}, {}]) as gh:
+            self.assertTrue(apply.upsert_ruleset("o/r", body, True, keep_rules=("code_scanning",)))
+        self.assertIn(previous, gh.call_args.kwargs["body"]["rules"])
 
 
 if __name__ == "__main__":

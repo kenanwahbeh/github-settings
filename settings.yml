@@ -32,8 +32,9 @@ actions:
   default_workflow_permissions: read          # GITHUB_TOKEN read-only unless a workflow asks for more
   can_approve_pull_request_reviews: false     # workflows cannot approve pull requests
   fork_pr_approval: all_external_contributors # first_time_contributors_new_to_github, first_time_contributors or all_external_contributors
-  # Not enforced: sha_pinning_required. workflows/semgrep.yml accepts actions
-  # pinned by version tag on purpose; enable it only after pinning by SHA.
+  # Phase 2: apply only after pinned workflows reach the target default branch.
+  # apply.py refuses enforcement while mutable references remain there.
+  sha_pinning_required: true
 
 # A ruleset on the default branch. Required checks are repository-specific:
 # pass EVERY desired check with repeated --check flags after verifying the
@@ -46,16 +47,29 @@ actions:
 # keep_existing_rules. Omitting --check keeps the live required_status_checks
 # rule; passing --check replaces its names while preserving policy and retained
 # source bindings. New names have no source binding by default. Other
-# manually-added rule types are replaced on the next run.
+# code_scanning is retained when this policy does not configure it for the
+# target scope. Other manually-added rule types are replaced on the next run.
 ruleset:
   name: main
   block_deletion: true
   block_force_push: true
   require_pull_request: true
+  # Configurable per repository; zero is not a policy for every customer.
+  strict_required_status_checks_policy: true
   required_approvals: 0
+  dismiss_stale_reviews_on_push: true
+  require_code_owner_review: false
+  require_last_push_approval: false
+  required_review_thread_resolution: true
+  code_scanning:
+    scope: public                 # private repositories require a supported tool/plan
+    tools:
+      - tool: CodeQL
+        alerts_threshold: errors
+        security_alerts_threshold: high_or_higher
   allowed_merge_methods: [squash]
   require_signed_commits: true
-  keep_existing_rules: [required_status_checks]
+  keep_existing_rules: [required_status_checks, code_scanning]
 
 # A ruleset on release tags: a published version can neither move nor vanish.
 # Ownership policy (tag ruleset): fully owned by settings.yml — keep_existing_rules

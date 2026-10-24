@@ -8,11 +8,13 @@
 """
 
 import argparse
+import base64
 import json
 import re
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 import yaml
 
@@ -92,7 +94,52 @@ def wanted(mode, public):
     return mode == "all" or (mode == "public" and public) or (mode == "private" and not public)
 
 
-def build_branch_ruleset(rules, checks=()):
+def unpinned_action_refs(document):
+    """Return mutable external Action references, including reusable workflows."""
+    refs = []
+    if isinstance(document, dict):
+        if "uses" in document:
+            ref = document["uses"]
+            if not isinstance(ref, str):
+                refs.append(str(ref))
+            elif not (ref.startswith("./") or re.fullmatch(r"[^\s@]+@[0-9a-fA-F]{40}", ref)
+                      or re.fullmatch(r"docker://[^\s@]+@sha256:[0-9a-fA-F]{64}", ref)):
+                refs.append(ref)
+        for value in document.values():
+            refs.extend(unpinned_action_refs(value))
+    elif isinstance(document, list):
+        for value in document:
+            refs.extend(unpinned_action_refs(value))
+    return refs
+
+
+def set_action_sha_pinning(repo, required, default_branch, dry):
+    """Keep unrelated Actions permissions and fail closed on mutable workflows."""
+    current = gh(f"repos/{repo}/actions/permissions")
+    if required:
+        listing = gh(f"repos/{repo}/actions/workflows?per_page=100")
+        if listing["total_count"] > 100:
+            raise RuntimeError("More than 100 workflows; audit all pages before enforcing SHA pinning")
+        for workflow in listing["workflows"]:
+            path = workflow["path"]
+            # GitHub-managed dynamic scans have no repository workflow file.
+            if not path.startswith(".github/workflows/"):
+                continue
+            result = gh(f"repos/{repo}/contents/{path}?ref={quote(default_branch, safe='')}")
+            try:
+                document = yaml.safe_load(base64.b64decode(result["content"]).decode("utf-8"))
+            except (ValueError, UnicodeError, yaml.YAMLError) as error:
+                raise RuntimeError(f"Could not validate {path}") from error
+            mutable = unpinned_action_refs(document)
+            if mutable:
+                raise RuntimeError(f"SHA pinning not enabled: {path} contains mutable references: {mutable}")
+    body = {"enabled": current["enabled"], "sha_pinning_required": required}
+    if "allowed_actions" in current:
+        body["allowed_actions"] = current["allowed_actions"]
+    gh("-X", "PUT", f"repos/{repo}/actions/permissions", body=body, dry_run=dry)
+
+
+def build_branch_ruleset(rules, checks=(), public=True):
     """Build the desired default-branch ruleset from settings and explicit CI checks.
 
     Passing checks is an explicit replacement policy: callers must provide every
@@ -117,22 +164,45 @@ def build_branch_ruleset(rules, checks=()):
     if rules["require_pull_request"]:
         body["rules"].append({"type": "pull_request", "parameters": {
             "allowed_merge_methods": rules["allowed_merge_methods"],
-            "dismiss_stale_reviews_on_push": False,
-            "require_code_owner_review": False,
-            "require_last_push_approval": False,
+            "dismiss_stale_reviews_on_push": rules.get("dismiss_stale_reviews_on_push", False),
+            "require_code_owner_review": rules.get("require_code_owner_review", False),
+            "require_last_push_approval": rules.get("require_last_push_approval", False),
             "required_approving_review_count": rules["required_approvals"],
-            "required_review_thread_resolution": False,
+            "required_review_thread_resolution": rules.get("required_review_thread_resolution", False),
         }})
     if checks:
         body["rules"].append({"type": "required_status_checks", "parameters": {
-            "strict_required_status_checks_policy": False,
+            "strict_required_status_checks_policy": rules.get("strict_required_status_checks_policy", True),
             "do_not_enforce_on_create": False,
             "required_status_checks": [{"context": name} for name in checks],
+        }})
+    scanning = rules.get("code_scanning", {})
+    if wanted(scanning.get("scope", "none"), public):
+        tools = scanning.get("tools", [])
+        if not tools:
+            raise RuntimeError("code_scanning requires at least one configured tool")
+        body["rules"].append({"type": "code_scanning", "parameters": {
+            "code_scanning_tools": tools,
         }})
     return body
 
 
-def upsert_ruleset(repo, body, dry, keep_rules=()):
+def validate_code_scanning_tools(repo, body, default_branch):
+    """Do not require tools with no successful analysis on the default branch."""
+    scanning = next((r for r in body["rules"] if r["type"] == "code_scanning"), None)
+    if scanning is None:
+        return
+    analyses = gh(f"repos/{repo}/code-scanning/analyses?per_page=100")
+    available = {analysis["tool"]["name"] for analysis in analyses
+                 if analysis.get("ref") == f"refs/heads/{default_branch}"
+                 and not analysis.get("error")}
+    missing = {tool["tool"] for tool in scanning["parameters"]["code_scanning_tools"]} - available
+    if missing:
+        raise RuntimeError(f"No successful default-branch analysis for {sorted(missing)}; "
+                           "configure scanning and verify it before requiring these tools")
+
+
+def upsert_ruleset(repo, body, dry, keep_rules=(), default_branch="main"):
     """Create the ruleset, or update the one with the same name.
 
     Ownership policy (documented in settings.yml): settings.yml owns every
@@ -143,6 +213,7 @@ def upsert_ruleset(repo, body, dry, keep_rules=()):
     Other rules return to the central state.
     """
     def action():
+        validate_code_scanning_tools(repo, body, default_branch)
         existing = [r for r in gh(f"repos/{repo}/rulesets?includes_parents=false")
                     if r["name"] == body["name"]]
         request_body = json.loads(json.dumps(body)) if dry else body
@@ -167,8 +238,9 @@ def upsert_ruleset(repo, body, dry, keep_rules=()):
                     for check in check_rule["parameters"]["required_status_checks"]:
                         if check["context"] in bindings:
                             check.setdefault("integration_id", bindings[check["context"]])
+            desired_types = {r["type"] for r in request_body["rules"]}
             kept = [r for r in current["rules"] if r["type"] in keep_rules
-                    and not (check_rule is not None and r["type"] == "required_status_checks")]
+                    and r["type"] not in desired_types]
             if dry and keep_rules:
                 print(f"  would keep {len(kept)} existing {'/'.join(keep_rules)} rule(s) on {body['name']}")
             request_body["rules"] += kept
@@ -188,6 +260,8 @@ def main():
     parser.add_argument("repo", help="owner/repo")
     parser.add_argument("--check", action="append", default=[], help="a required CI check")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--settings", type=Path, default=Path(__file__).parent / "settings.yml",
+                        help="repository-specific policy YAML (defaults to settings.yml)")
     args = parser.parse_args()
     if not is_valid_repo_slug(args.repo):
         parser.error("repo must be a plain owner/repository slug (letters, digits, dots, underscores or hyphens only)")
@@ -195,7 +269,7 @@ def main():
         parser.error("each --check must be non-empty and have no leading/trailing whitespace")
     if len(set(args.check)) != len(args.check):
         parser.error("duplicate --check values are not allowed")
-    settings = yaml.safe_load((Path(__file__).parent / "settings.yml").read_text())
+    settings = yaml.safe_load(args.settings.read_text(encoding="utf-8"))
     repo, dry = args.repo, args.dry_run
 
     try:
@@ -261,6 +335,9 @@ def main():
             "default_workflow_permissions": actions["default_workflow_permissions"],
             "can_approve_pull_request_reviews": actions["can_approve_pull_request_reviews"],
         }, dry_run=dry))
+    if "sha_pinning_required" in actions:
+        ok &= step("Actions: immutable references", lambda: set_action_sha_pinning(
+            repo, actions["sha_pinning_required"], info.get("default_branch", "main"), dry))
     if public:  # GitHub refuses this setting on private repositories
         ok &= step("Actions: approval of pull requests from outside", lambda: gh(
             "-X", "PUT", f"repos/{repo}/actions/permissions/fork-pr-contributor-approval",
@@ -270,10 +347,12 @@ def main():
     if repo in settings.get("ruleset_exclude", []):
         print(f"• Ruleset {rules['name']}: {repo} is excluded.")
     else:
-        body = build_branch_ruleset(rules, args.check)
+        body = build_branch_ruleset(rules, args.check, public=public)
         ok &= upsert_ruleset(
             repo, body, dry,
-            keep_rules=rules.get("keep_existing_rules", []) if not args.check else [])
+            keep_rules=[rule_type for rule_type in rules.get("keep_existing_rules", [])
+                        if not (args.check and rule_type == "required_status_checks")],
+            default_branch=info.get("default_branch", "main"))
 
     tags = settings["tag_ruleset"]
     tag_body = {
