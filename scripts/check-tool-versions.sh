@@ -15,6 +15,7 @@ while IFS= read -r line || [ -n "$line" ]; do
     version="$(echo "$version" | tr -d ' \t\"')"
     case "$name" in
         gitleaks) marker="GITLEAKS_VERSION:"; pattern="GITLEAKS_VERSION: $version" ;;
+        gitleaks_sha256) marker="GITLEAKS_SHA256:"; pattern="GITLEAKS_SHA256: $version" ;;
         semgrep)  marker="semgrep=="; pattern="semgrep==$version" ;;
         *) echo "? no known check for '$name'"; status=1; continue ;;
     esac
