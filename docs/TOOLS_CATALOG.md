@@ -100,7 +100,7 @@
 | العنصر | الرابط | العلاقة |
 |---|---|---|
 | github-settings | https://github.com/kenanwahbeh/github-settings | قالب إعدادات GitHub باستخدام settings.yml وapply.py، مع توثيق مركزي للوكيل البرمجي وCloudflare AI |
-| Pull Request #8 | https://github.com/kenanwahbeh/github-settings/pull/8 | طلب دمج بعنوان «توثيق مركزي لوكيل البرمجة وCloudflare AI»؛ يجب التحقق من حالته قبل افتراض الدمج |
+| Pull Request #8 | https://github.com/kenanwahbeh/github-settings/pull/8 | طلب دمج بعنوان «توثيق مركزي لوكيل البرمجة وCloudflare AI»؛ دُمج في `main` بتاريخ 2026-10-23 (commit `4ebf1ab3bb70485af8dbf8ea524a18d07d54cc86`) |
 
 ## 9. مجموعة بداية مقترحة لمشروع مجاني
 
