@@ -68,6 +68,46 @@ def wanted(mode, public):
     return mode == "all" or (mode == "public" and public) or (mode == "private" and not public)
 
 
+def build_branch_ruleset(rules, checks=()):
+    """Build the desired default-branch ruleset from settings and explicit CI checks.
+
+    Passing checks is an explicit replacement policy: callers must provide every
+    check that should block merging. An empty list intentionally omits the
+    required_status_checks rule; upsert_ruleset may preserve the live rule only
+    when configured to keep that rule type.
+    """
+    body = {
+        "name": rules["name"],
+        "target": "branch",
+        "enforcement": "active",
+        "bypass_actors": [],
+        "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
+        "rules": [],
+    }
+    if rules["block_deletion"]:
+        body["rules"].append({"type": "deletion"})
+    if rules["block_force_push"]:
+        body["rules"].append({"type": "non_fast_forward"})
+    if rules["require_signed_commits"]:
+        body["rules"].append({"type": "required_signatures"})
+    if rules["require_pull_request"]:
+        body["rules"].append({"type": "pull_request", "parameters": {
+            "allowed_merge_methods": rules["allowed_merge_methods"],
+            "dismiss_stale_reviews_on_push": False,
+            "require_code_owner_review": False,
+            "require_last_push_approval": False,
+            "required_approving_review_count": rules["required_approvals"],
+            "required_review_thread_resolution": False,
+        }})
+    if checks:
+        body["rules"].append({"type": "required_status_checks", "parameters": {
+            "strict_required_status_checks_policy": False,
+            "do_not_enforce_on_create": False,
+            "required_status_checks": [{"context": name} for name in checks],
+        }})
+    return body
+
+
 def upsert_ruleset(repo, body, dry, keep_rules=()):
     """Create the ruleset, or update the one with the same name.
 
@@ -177,35 +217,7 @@ def main():
     if repo in settings.get("ruleset_exclude", []):
         print(f"• Ruleset {rules['name']}: {repo} is excluded.")
     else:
-        body = {
-            "name": rules["name"],
-            "target": "branch",
-            "enforcement": "active",
-            "bypass_actors": [],
-            "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
-            "rules": [],
-        }
-        if rules["block_deletion"]:
-            body["rules"].append({"type": "deletion"})
-        if rules["block_force_push"]:
-            body["rules"].append({"type": "non_fast_forward"})
-        if rules["require_signed_commits"]:
-            body["rules"].append({"type": "required_signatures"})
-        if rules["require_pull_request"]:
-            body["rules"].append({"type": "pull_request", "parameters": {
-                "allowed_merge_methods": rules["allowed_merge_methods"],
-                "dismiss_stale_reviews_on_push": False,
-                "require_code_owner_review": False,
-                "require_last_push_approval": False,
-                "required_approving_review_count": rules["required_approvals"],
-                "required_review_thread_resolution": False,
-            }})
-        if args.check:
-            body["rules"].append({"type": "required_status_checks", "parameters": {
-                "strict_required_status_checks_policy": False,
-                "do_not_enforce_on_create": False,
-                "required_status_checks": [{"context": name} for name in args.check],
-            }})
+        body = build_branch_ruleset(rules, args.check)
         ok &= upsert_ruleset(
             repo, body, dry,
             keep_rules=rules.get("keep_existing_rules", []) if not args.check else [])
