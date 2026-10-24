@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Verify that the active `main` ruleset requires the expected GitHub Actions checks and blocks a pull request when a required check fails. This is a test record; do not merge PR #18.
+Verify that the active `main` ruleset requires the expected GitHub Actions checks and blocks a pull request when a required check fails. This is a historical test record; PR #18 was subsequently merged after cleanup.
 
 ## Required contexts
 
@@ -31,8 +31,10 @@ All three were configured as required checks from GitHub Actions. The ruleset's 
 
 ## Cleanup and current state
 
-After recording the failed-check merge rejection, the temporary comment was removed from `workflows/semgrep.yml` on the test branch, restoring its content to match `.github/workflows/semgrep.yml`. GitHub Actions should be allowed to rerun on the new commit; check the PR Checks tab for the final outcomes. PR #18 is intended to remain open and unmerged. Do not enable auto-merge for this test PR.
+بعد تسجيل رفض الدمج بسبب فشل الفحص، أُزيل التعليق المؤقت وعاد ملفا Semgrep إلى التطابق. نجحت الفحوص على commit التنظيف `6c1530d97a19696841915d380462c993a1067fa2`، ثم دُمج PR #18 بطريقة squash بتاريخ 24 أكتوبر 2026 الساعة 10:15:42 بتوقيت دمشق، إلى commit `45c1363b7375066fdc5f17f54f6cfc3e3a235f5a`.
+
+نجحت أيضاً فحوص الاختبارات والاتساق وGitleaks وSemgrep وCodeQL على commit الدمج. رفض محاولة الدمج أثناء الفشل دليل الاختبار السلبي؛ الدمج اللاحق بعد التنظيف حدث منفصل.
 
 ## Conclusion
 
-The negative test succeeded: GitHub explicitly rejected the merge because a required status check was failing. This is direct evidence that the required-check rule was enforced for this PR at the time of the test. The new commit's check results must be inspected separately after cleanup.
+The negative test succeeded: GitHub explicitly rejected the merge because a required status check was failing. This is direct evidence that the required-check rule was enforced for this PR at the time of the test. The cleanup and subsequent merge results are recorded above.
