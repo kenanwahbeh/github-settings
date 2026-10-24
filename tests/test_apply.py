@@ -17,7 +17,7 @@ import apply  # noqa: E402
 
 def fake_run(responses):
     """Build a subprocess.run stand-in driven by a {endpoint-substring: payload} map."""
-    def _run(command, input=None, capture_output=True, text=True):
+    def _run(command, input=None, capture_output=True, text=True, timeout=None):
         endpoint = command[2] if len(command) > 2 else ""
         class Result:
             returncode = 0
@@ -266,6 +266,145 @@ class TestWantedScope(unittest.TestCase):
         self.assertTrue(apply.wanted("private", False))
         self.assertFalse(apply.wanted("none", True))
         self.assertFalse(apply.wanted("none", False))
+
+
+class TestApiErrors(unittest.TestCase):
+    def test_timeout_is_bounded_and_write_outcome_is_explicit(self):
+        with mock.patch.object(apply.subprocess, "run", side_effect=
+                               apply.subprocess.TimeoutExpired("gh", 60)) as run:
+            with self.assertRaisesRegex(RuntimeError, "write outcome is unknown"):
+                apply.gh("-X", "PUT", "repos/o/r/x")
+        self.assertEqual(run.call_args.kwargs["timeout"], 60)
+
+    def test_missing_binary_is_reported(self):
+        with mock.patch.object(apply.subprocess, "run", side_effect=FileNotFoundError("gh")):
+            with self.assertRaisesRegex(RuntimeError, "Could not run gh api"):
+                apply.gh("repos/o/r")
+
+    def test_api_failure_preserves_diagnostic(self):
+        result = mock.Mock(returncode=1, stderr="HTTP 403: denied", stdout="")
+        with mock.patch.object(apply.subprocess, "run", return_value=result):
+            with self.assertRaisesRegex(RuntimeError, "HTTP 403: denied"):
+                apply.gh("-X", "PUT", "repos/o/r/x")
+
+    def test_invalid_json_is_reported(self):
+        result = mock.Mock(returncode=0, stdout="not json")
+        with mock.patch.object(apply.subprocess, "run", return_value=result):
+            with self.assertRaisesRegex(RuntimeError, "invalid JSON"):
+                apply.gh("repos/o/r")
+
+
+class TestPreservedCheckPolicy(unittest.TestCase):
+    def test_replacing_names_keeps_policy_and_matching_source_in_both_modes(self):
+        for dry in (True, False):
+            with self.subTest(dry=dry):
+                body = {"name": "main", "rules": [{"type": "required_status_checks", "parameters": {
+                    "strict_required_status_checks_policy": False,
+                    "do_not_enforce_on_create": False,
+                    "required_status_checks": [{"context": "kept"}, {"context": "new"}],
+                }}]}
+                original = json.loads(json.dumps(body))
+                current = {"rules": [{"type": "required_status_checks", "parameters": {
+                    "strict_required_status_checks_policy": True,
+                    "do_not_enforce_on_create": True,
+                    "required_status_checks": [{"context": "kept", "integration_id": 15368},
+                                               {"context": "removed", "integration_id": 42}],
+                }}]}
+                with mock.patch.object(apply, "gh", side_effect=[
+                        [{"id": 7, "name": "main"}], current, {}]) as gh:
+                    self.assertTrue(apply.upsert_ruleset("o/r", body, dry))
+                payload = gh.call_args.kwargs["body"]
+                parameters = payload["rules"][0]["parameters"]
+                self.assertTrue(parameters["strict_required_status_checks_policy"])
+                self.assertTrue(parameters["do_not_enforce_on_create"])
+                self.assertEqual(parameters["required_status_checks"], [
+                    {"context": "kept", "integration_id": 15368}, {"context": "new"}])
+                self.assertEqual(gh.call_args.kwargs["dry_run"], dry)
+                if dry:
+                    self.assertEqual(body, original)
+
+    def test_failed_ruleset_read_prevents_write(self):
+        for responses in ([RuntimeError("list failed")],
+                          [[{"id": 7, "name": "main"}], RuntimeError("detail failed")]):
+            with mock.patch.object(apply, "gh", side_effect=responses) as gh:
+                self.assertFalse(apply.upsert_ruleset(
+                    "o/r", {"name": "main", "rules": []}, False,
+                    keep_rules=("required_status_checks",)))
+            self.assertTrue(all("-X" not in call.args for call in gh.call_args_list))
+
+
+class TestMainFlow(unittest.TestCase):
+    def run_main(self, responder, *args):
+        with mock.patch.object(sys, "argv", ["apply.py", "o/r", *args]), \
+             mock.patch.object(apply, "gh", side_effect=responder) as gh, \
+             mock.patch("builtins.print") as output, \
+             self.assertRaises(SystemExit) as stopped:
+            apply.main()
+        return stopped.exception.code, gh.call_args_list, output
+
+    @staticmethod
+    def responder(private=False, fail_rules=False):
+        def respond(*args, **kwargs):
+            if args == ("repos/o/r",):
+                return {"private": private}
+            if args[0].endswith("rulesets?includes_parents=false"):
+                if fail_rules:
+                    raise RuntimeError("ruleset read denied")
+                return []
+            if kwargs.get("body", {}).get("security_and_analysis"):
+                return kwargs["body"]
+            return {}
+        return respond
+
+    def test_public_and_private_success_paths(self):
+        for private in (True, False):
+            code, calls, _ = self.run_main(self.responder(private))
+            self.assertEqual(code, 0)
+            endpoints = [call.args[-1] for call in calls]
+            self.assertEqual("repos/o/r/code-scanning/default-setup" in endpoints, not private)
+            self.assertEqual("repos/o/r/private-vulnerability-reporting" in endpoints, not private)
+            self.assertEqual("repos/o/r/actions/permissions/fork-pr-contributor-approval" in endpoints,
+                             not private)
+            writes = [call for call in calls if call.args[:2] == ("-X", "POST")]
+            self.assertEqual([call.kwargs["body"]["name"] for call in writes], ["main", "tags"])
+
+    def test_read_failure_after_changes_exits_nonzero_and_summarizes(self):
+        code, calls, output = self.run_main(self.responder(fail_rules=True))
+        self.assertEqual(code, 1)
+        self.assertTrue(any(call.args[:2] == ("-X", "PATCH") for call in calls))
+        self.assertFalse(any(call.args[:2] == ("-X", "POST") for call in calls))
+        self.assertTrue(any("not rolled back" in str(call) for call in output.call_args_list))
+
+    def test_write_failure_is_reported_and_later_steps_continue(self):
+        respond = self.responder()
+
+        def fail_first_write(*args, **kwargs):
+            if args == ("-X", "PUT", "repos/o/r/vulnerability-alerts"):
+                raise RuntimeError("HTTP 403: denied")
+            return respond(*args, **kwargs)
+
+        code, calls, output = self.run_main(fail_first_write)
+        self.assertEqual(code, 1)
+        self.assertTrue(any(call.kwargs.get("body", {}).get("name") == "tags" for call in calls))
+        self.assertTrue(any("HTTP 403: denied" in str(call) for call in output.call_args_list))
+        self.assertTrue(any("not rolled back" in str(call) for call in output.call_args_list))
+
+    def test_initial_read_failure_stops_before_writes(self):
+        code, calls, _ = self.run_main(RuntimeError("connection failed"))
+        self.assertIn("No settings were applied", code)
+        self.assertEqual(len(calls), 1)
+
+    def test_dry_run_cli_never_executes_write_subprocesses(self):
+        def respond(command, **kwargs):
+            self.assertNotIn("-X", command)
+            payload = {"private": False} if command[-1] == "repos/o/r" else []
+            return mock.Mock(returncode=0, stdout=json.dumps(payload))
+        with mock.patch.object(sys, "argv", ["apply.py", "o/r", "--dry-run", "--check", "real"]), \
+             mock.patch.object(apply.subprocess, "run", side_effect=respond) as run, \
+             mock.patch("builtins.print"), self.assertRaises(SystemExit) as stopped:
+            apply.main()
+        self.assertEqual(stopped.exception.code, 0)
+        self.assertEqual(run.call_count, 3)
 
 
 if __name__ == "__main__":

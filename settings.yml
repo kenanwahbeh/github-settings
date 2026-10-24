@@ -38,12 +38,14 @@ actions:
 # A ruleset on the default branch. Required checks are repository-specific:
 # pass EVERY desired check with repeated --check flags after verifying the
 # exact check names on a real PR. Supplying --check replaces the complete
-# required_status_checks rule; omitting it preserves the live check rule.
+# required check names, preserving the live policy and retained source bindings.
+# Omitting --check preserves the complete live check rule.
 # For this repository, use the command documented in README.md to include
 # gitleaks, semgrep, and "Regression and consistency checks".
 # Ownership policy: settings.yml owns every rule EXCEPT types listed in
 # keep_existing_rules. Omitting --check keeps the live required_status_checks
-# rule; passing --check replaces it with exactly the supplied names. Other
+# rule; passing --check replaces its names while preserving policy and retained
+# source bindings. New names have no source binding by default. Other
 # manually-added rule types are replaced on the next run.
 ruleset:
   name: main

@@ -17,6 +17,7 @@ from pathlib import Path
 import yaml
 
 
+API_TIMEOUT_SECONDS = 60
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 REPO_SLUG_RE = re.compile(r"^[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}$")
 
@@ -55,15 +56,25 @@ def gh(*args, body=None, dry_run=False):
     if dry_run and is_write:
         print("  would run:", " ".join(command), json.dumps(body) if body else "")
         return {}
-    result = subprocess.run(
-        command + (["--input", "-"] if body is not None else []),
-        input=json.dumps(body) if body is not None else None,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            command + (["--input", "-"] if body is not None else []),
+            input=json.dumps(body) if body is not None else None,
+            capture_output=True,
+            text=True,
+            timeout=API_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as error:
+        detail = " The write outcome is unknown; inspect GitHub before retrying." if is_write else ""
+        raise RuntimeError(f"gh api timed out after {API_TIMEOUT_SECONDS}s.{detail}") from error
+    except OSError as error:
+        raise RuntimeError(f"Could not run gh api: {error}") from error
     if result.returncode:
         raise RuntimeError(result.stderr.strip() or result.stdout.strip())
-    return json.loads(result.stdout) if result.stdout.strip() else {}
+    try:
+        return json.loads(result.stdout) if result.stdout.strip() else {}
+    except json.JSONDecodeError as error:
+        raise RuntimeError("gh api returned invalid JSON; inspect GitHub before retrying writes.") from error
 
 
 def step(name, action):
@@ -127,28 +138,48 @@ def upsert_ruleset(repo, body, dry, keep_rules=()):
     Ownership policy (documented in settings.yml): settings.yml owns every
     rule except the types named in `keep_rules`. On an update those types are
     read from the live ruleset and appended to the payload, so per-repository
-    additions survive re-apply; everything else returns to the central state.
+    additions survive re-apply. Explicit check names replace only the list; the
+    live check policy and bindings of retained names survive that replacement.
+    Other rules return to the central state.
     """
-    existing = [r for r in gh(f"repos/{repo}/rulesets?includes_parents=false") if r["name"] == body["name"]]
-    request_body = body  # what actually goes on the wire
-    if existing and keep_rules:
-        # Keep the rule types the policy exempts. In --dry-run this read is
-        # allowed; the kept rules go into a separate preview copy so the
-        # printed PUT payload matches what a real run would send, while the
-        # caller's body stays unmutated.
-        current = gh(f"repos/{repo}/rulesets/{existing[0]['id']}")
-        kept = [r for r in current["rules"] if r["type"] in keep_rules]
-        if dry:
-            print(f"  would keep {len(kept)} existing {'/'.join(keep_rules)} rule(s) on {body['name']}")
-            request_body = json.loads(json.dumps(body))  # deep copy: preview only
+    def action():
+        existing = [r for r in gh(f"repos/{repo}/rulesets?includes_parents=false")
+                    if r["name"] == body["name"]]
+        request_body = json.loads(json.dumps(body)) if dry else body
+        check_rule = next((r for r in request_body["rules"]
+                           if r["type"] == "required_status_checks"), None)
+        if existing and (keep_rules or check_rule is not None):
+            current = gh(f"repos/{repo}/rulesets/{existing[0]['id']}")
+            # --check replaces names, but retains the live policy and source
+            # binding for each retained context. New contexts use the defaults.
+            if check_rule is not None:
+                previous = next((r for r in current["rules"]
+                                 if r["type"] == "required_status_checks"), None)
+                if previous is not None:
+                    parameters = previous["parameters"]
+                    check_rule["parameters"].update({
+                        key: value for key, value in parameters.items()
+                        if key != "required_status_checks"
+                    })
+                    bindings = {check["context"]: check["integration_id"]
+                                for check in parameters["required_status_checks"]
+                                if "integration_id" in check}
+                    for check in check_rule["parameters"]["required_status_checks"]:
+                        if check["context"] in bindings:
+                            check.setdefault("integration_id", bindings[check["context"]])
+            kept = [r for r in current["rules"] if r["type"] in keep_rules
+                    and not (check_rule is not None and r["type"] == "required_status_checks")]
+            if dry and keep_rules:
+                print(f"  would keep {len(kept)} existing {'/'.join(keep_rules)} rule(s) on {body['name']}")
             request_body["rules"] += kept
+        if existing:
+            gh("-X", "PUT", f"repos/{repo}/rulesets/{existing[0]['id']}",
+               body=request_body, dry_run=dry)
+            print(f"  Ruleset {body['name']} (updated)")
         else:
-            body["rules"] += kept
-    if existing:
-        return step(f"Ruleset {body['name']} (updated)", lambda: gh(
-            "-X", "PUT", f"repos/{repo}/rulesets/{existing[0]['id']}", body=request_body, dry_run=dry))
-    return step(f"Ruleset {body['name']}", lambda: gh(
-        "-X", "POST", f"repos/{repo}/rulesets", body=request_body, dry_run=dry))
+            gh("-X", "POST", f"repos/{repo}/rulesets", body=request_body, dry_run=dry)
+
+    return step(f"Ruleset {body['name']}", action)
 
 
 def main():
@@ -167,7 +198,10 @@ def main():
     settings = yaml.safe_load((Path(__file__).parent / "settings.yml").read_text())
     repo, dry = args.repo, args.dry_run
 
-    info = gh(f"repos/{repo}")
+    try:
+        info = gh(f"repos/{repo}")
+    except RuntimeError as error:
+        sys.exit(f"Could not read repository {repo}: {error}. No settings were applied.")
     if info.get("archived"):
         sys.exit(f"{repo} is archived: nothing can be changed.")
     public = not info["private"]
@@ -256,6 +290,8 @@ def main():
         tag_body["rules"].append({"type": "update"})
     ok &= upsert_ruleset(repo, tag_body, dry, keep_rules=tags.get("keep_existing_rules", []))
 
+    if not ok:
+        print("Some steps failed; earlier successful changes were not rolled back. Review the output before retrying.")
     sys.exit(0 if ok else 1)
 
 
