@@ -108,10 +108,14 @@ jobs:
           for attempt in {1..24}; do
             echo "Waiting for bootstrap branch, attempt $attempt"
             if gh api "repos/$OWNER/$REPOSITORY/git/ref/heads/bootstrap/$PRESET" >/dev/null 2>&1; then
-              gh pr create --repo "$OWNER/$REPOSITORY" \
+              # REPO_CREATION_TOKEN is separate from GITHUB_TOKEN and needs Pull requests: write on the target repository.
+              if ! gh pr create --repo "$OWNER/$REPOSITORY" \
                 --base main --head "bootstrap/$PRESET" \
                 --title "chore: initialize $PRESET project" \
-                --body "Initial project bootstrap generated from the repository template."
+                --body "Initial project bootstrap generated from the repository template."; then
+                echo "::error::Could not open bootstrap pull request. Verify REPO_CREATION_TOKEN has Pull requests: write on $OWNER/$REPOSITORY and that no PR already exists for bootstrap/$PRESET." >&2
+                exit 1
+              fi
               exit 0
             fi
             sleep 5

@@ -592,17 +592,67 @@ class TestAiScan(unittest.TestCase):
         self.assertFalse(gh.call_args.kwargs["dry_run"])
 
     def test_repository_without_advanced_security_is_not_a_failure(self):
-        for message in ("HTTP 403: GitHub Advanced Security is not enabled",
-                        "HTTP 404: Not Found"):
+        message = "HTTP 403: AI Scan is not available for this repository's current plan"
+        with mock.patch.object(apply, "gh", side_effect=RuntimeError(message)), \
+             mock.patch("builtins.print"):
+            self.assertEqual(apply.set_ai_scan("o/r", False, False), "not-available")
+
+    def test_status_distinguishes_verified_and_unavailable(self):
+        with mock.patch.object(apply, "gh", return_value={}):
+            self.assertEqual(apply.set_ai_scan("o/r", False, False), "applied")
+        with mock.patch.object(apply, "gh", side_effect=RuntimeError("HTTP 403: unavailable")):
+            with self.assertRaisesRegex(RuntimeError, "HTTP 403"):
+                apply.set_ai_scan("o/r", False, False)
+
+    def test_ambiguous_and_invalid_errors_fail(self):
+        for message in ("HTTP 404: Not Found", "HTTP 422: validation failed"):
             with self.subTest(message=message), \
                  mock.patch.object(apply, "gh", side_effect=RuntimeError(message)), \
-                 mock.patch("builtins.print"):
-                apply.set_ai_scan("o/r", False, False)  # must not raise
+                 self.assertRaisesRegex(RuntimeError, message.split(":")[0]):
+                apply.set_ai_scan("o/r", False, False)
+
+    def test_not_available_is_not_reported_as_success(self):
+        with mock.patch("builtins.print") as output:
+            self.assertTrue(apply.step("AI Scan", lambda: "not-available"))
+        rendered = " ".join(str(call.args[0]) for call in output.call_args_list)
+        self.assertIn("AI Scan [not-available]", rendered)
+        self.assertNotIn("✓", rendered)
+
+    def test_success_does_not_log_action_return_value(self):
+        with mock.patch("builtins.print") as output:
+            self.assertTrue(apply.step("Secret scanning", lambda: "sensitive-response-value"))
+        rendered = " ".join(str(call.args[0]) for call in output.call_args_list)
+        self.assertIn("✓ Secret scanning", rendered)
+        self.assertNotIn("sensitive-response-value", rendered)
 
     def test_other_errors_still_fail(self):
         with mock.patch.object(apply, "gh", side_effect=RuntimeError("HTTP 500: server error")):
             with self.assertRaisesRegex(RuntimeError, "HTTP 500"):
                 apply.set_ai_scan("o/r", False, False)
+
+
+class TestSecretScanning(unittest.TestCase):
+    ANALYSIS = {"secret_scanning": {"status": "enabled"}}
+
+    def test_status_distinguishes_verified_and_unavailable(self):
+        with mock.patch.object(apply, "gh", return_value={"security_and_analysis": self.ANALYSIS}):
+            self.assertEqual(apply.set_secret_scanning("o/r", self.ANALYSIS, False), "verified")
+        message = "HTTP 403: Secret scanning is not available for this repository's current plan"
+        with mock.patch.object(apply, "gh", side_effect=RuntimeError(message)):
+            self.assertEqual(apply.set_secret_scanning("o/r", self.ANALYSIS, False), "not-available")
+
+    def test_forbidden_not_found_and_invalid_errors_fail(self):
+        for message in ("HTTP 403: permission denied", "HTTP 404: Not Found",
+                        "HTTP 422: validation failed"):
+            with self.subTest(message=message), \
+                 mock.patch.object(apply, "gh", side_effect=RuntimeError(message)), \
+                 self.assertRaisesRegex(RuntimeError, message.split(":")[0]):
+                apply.set_secret_scanning("o/r", self.ANALYSIS, False)
+
+    def test_other_errors_still_fail(self):
+        with mock.patch.object(apply, "gh", side_effect=RuntimeError("HTTP 500: server error")):
+            with self.assertRaisesRegex(RuntimeError, "HTTP 500"):
+                apply.set_secret_scanning("o/r", self.ANALYSIS, False)
 
 
 if __name__ == "__main__":

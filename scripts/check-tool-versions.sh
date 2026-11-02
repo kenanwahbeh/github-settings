@@ -22,12 +22,10 @@ while IFS= read -r line || [ -n "$line" ]; do
         semgrep)  marker="semgrep=="; pattern="semgrep==$version" ;;
         actionlint) marker="ACTIONLINT_VERSION:"; pattern="ACTIONLINT_VERSION: $version" ;;
         actionlint_sha256) marker="ACTIONLINT_SHA256:"; pattern="ACTIONLINT_SHA256: $version" ;;
-        osv_scanner)
-            expected_sha="037c3543ac60359190459b10fbb5331568b4c8f5"
-            marker="google/osv-scanner@"; pattern="google/osv-scanner@$expected_sha" ;;
-        trivy_action)
-            expected_sha="915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2"
-            marker="aquasecurity/trivy-action@"; pattern="aquasecurity/trivy-action@$expected_sha" ;;
+        osv_scanner) marker="OSV_VERSION:"; pattern="OSV_VERSION: \"$version\"" ;;
+        osv_scanner_digest) marker="OSV_IMAGE:"; pattern="OSV_IMAGE: \"ghcr.io/google/osv-scanner@sha256:$version\"" ;;
+        trivy) marker="TRIVY_VERSION:"; pattern="TRIVY_VERSION: \"$version\"" ;;
+        trivy_digest) marker="TRIVY_IMAGE:"; pattern="TRIVY_IMAGE: \"aquasec/trivy@sha256:$version\"" ;;
         mutmut) marker="mutmut=="; pattern="mutmut==$version" ;;
         benchmark_action)
             expected_sha="49efc295c639840069791d8d1f47a24b5e8c7f34"
@@ -41,10 +39,13 @@ while IFS= read -r line || [ -n "$line" ]; do
     for f in workflows/*.yml .github/workflows/*.yml; do
         if grep -qF "$marker" "$f"; then
             found=1
-            if grep -qF "$pattern" "$f"; then
+            marker_lines="$(grep -F "$marker" "$f")"
+            unexpected="$(printf '%s\n' "$marker_lines" | grep -Fv "$pattern" || true)"
+            if [ -z "$unexpected" ]; then
                 echo "✓ $f: $name $version"
             else
-                echo "✗ $f: $name does not match scripts/tool-versions.cfg ($version)"
+                echo "✗ $f: every $name reference must match scripts/tool-versions.cfg ($version)"
+                printf '%s\n' "$unexpected"
                 status=1
             fi
         fi

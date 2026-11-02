@@ -1,6 +1,7 @@
 # Dependency SCA — OSV-Scanner.
-# Uploads SARIF to GitHub Security tab (Code Scanning alerts).
-# Actions are pinned to full commit SHAs.
+# Prints OSV results to the job log; SARIF upload is unavailable on GitHub Free
+# private repositories without Code Scanning.
+# The scanner image is pinned to a verified multi-arch digest.
 name: deps-sca
 on:
   push:
@@ -11,16 +12,26 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-  security-events: write   # for SARIF upload
 jobs:
   osv-scanner:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: google/osv-scanner@037c3543ac60359190459b10fbb5331568b4c8f5 # v1.7.0
-        with:
-          args: "--recursive --format sarif --output osv.sarif ."
-      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v3
-        with:
-          sarif_file: osv.sarif
-          category: osv-scanner
+      - name: Scan dependencies with OSV-Scanner
+        env:
+          OSV_VERSION: "2.7.0"
+          OSV_IMAGE: "ghcr.io/google/osv-scanner@sha256:4f3b7e2c64b9d38a5febc5a7e4a3dfef1d1362f726dea7a2ef4762b46469fcd0"
+        run: |
+          set +e
+          docker run --rm -v "$PWD:/src" "$OSV_IMAGE" \
+            scan source --recursive /src --format vertical --output-file /src/osv-results.txt
+          status=$?
+          if [[ -f osv-results.txt ]]; then
+            cat osv-results.txt
+          else
+            echo "OSV-Scanner $OSV_VERSION produced no report file" >&2
+            if [[ "$status" -eq 0 ]]; then
+              status=1
+            fi
+          fi
+          exit "$status"

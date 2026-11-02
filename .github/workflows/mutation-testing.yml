@@ -1,4 +1,4 @@
-# Mutation testing with mutmut — verifies test suite quality.
+# Mutation testing with mutmut — informational quality signal, not a merge gate.
 # Runs weekly on main (heavy); optional on PR via workflow_dispatch.
 # Actions are pinned to full commit SHAs.
 name: mutation-testing
@@ -28,4 +28,7 @@ jobs:
           mutmut run --paths-to-mutate=apply.py --tests-dir=tests --runner="python -m pytest -x" --test-time-multiplier=3 --CI
       - name: Results summary
         if: always()
-        run: mutmut results
+        run: |
+          echo "## Mutation testing (informational)" >> "$GITHUB_STEP_SUMMARY"
+          mutmut results | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "No survival threshold is imposed; this workflow is not a merge gate." >> "$GITHUB_STEP_SUMMARY"

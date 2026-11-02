@@ -1,6 +1,6 @@
 # سياسة تجهيز مستودعات GitHub
 
-مرجع لما يمكن ضبطه على أي مستودع جديد، وما يغطيه `apply.py` اليوم وما لا يغطيه. مصدره توثيق GitHub (docs.github.com) في تشرين الأول 2026. ما لم أتحقق منه بنفسي مكتوب «غير مؤكد».
+مرجع لما يمكن ضبطه على أي مستودع جديد، وما يغطيه `apply.py` اليوم وما لا يغطيه. مصدره توثيق GitHub (docs.github.com) حتى 2 تشرين الثاني 2026. ما لم أتحقق منه بنفسي مكتوب «غير مؤكد».
 
 الرموز: ✅ مطبَّق في `apply.py` · ➕ موصى به ولم يُطبَّق بعد · 🖐 يدوي (لا API) · ⚖ اختياري حسب الذوق.
 
@@ -12,7 +12,7 @@
 | منع force push `non_fast_forward` | ✅ | |
 | كل تغيير بـ pull request، بلا موافقات (0) | ✅ | العدد قابل للضبط لكل مستودع؛ لا تعمم صفر موافقات على جميع عملاء المنتج. تبقى الموافقة على الدمج منفصلة عن نتيجة الآلة. |
 | فحوص CI مطلوبة `required_status_checks` | ✅ بأسماء فعلية | تُستبدل الأسماء عند --check مع حفظ السياسة الحية وربط المصادر للأسماء الباقية. الفرع يجب أن يكون محدثاً. |
-| تواقيع موثّقة `required_signatures` | ✅ | تحققت في ruleset المرجع؛ يعاد التحقق في كل مستودع هدف بعد التطبيق. |
+| تواقيع موثّقة `required_signatures` | ❌ معطّلة | `settings.yml` يضبط `require_signed_commits: false` لأن commits Bootstrap تنشئها GitHub Actions. |
 | تاريخ خطي `required_linear_history` | ⚖ | يفرض squash أو rebase فقط. يعطي سجلاً نظيفاً، ويتطلب أن يسمح المستودع بأحدهما. |
 | نتائج code scanning `code_scanning` | ✅ قابلة للضبط | CodeQL للعام وفق السياسة الحالية، أخطاء وHigh/Critical؛ يلزم تحليل ناجح على الفرع الافتراضي قبل فرض الأداة. |
 | حل تنبيهات الأسرار `secret_scanning` | ⚖ | معاينة عامة (public preview) في التوثيق. |
@@ -44,7 +44,7 @@
 |---|---|---|
 | صلاحيات `GITHUB_TOKEN` الافتراضية | `PUT repos/{repo}/actions/permissions/workflow` | `default_workflow_permissions: read` و`can_approve_pull_request_reviews: false` ✅ |
 | موافقة تشغيل PR من الخارج | `PUT .../actions/permissions/fork-pr-contributor-approval` | `all_external_contributors` ✅ |
-| فرض تثبيت Actions بـSHA | `PUT repos/{repo}/actions/permissions` | مبرمج في المرحلة الأولى؛ يُفعّل حياً بعد دمج الملفات المثبتة وفحصها في المرحلة الثانية. |
+| فرض تثبيت Actions بـSHA | PUT repos/{repo}/actions/permissions | مفعّل في المستودع المرجعي بتاريخ 2 نوفمبر 2026 (sha_pinning_required=true)؛ يجب التحقق منه منفصلاً في كل مستودع هدف. |
 | قائمة الـ Actions المسموحة | `PUT .../actions/permissions/selected-actions` | ⚖ |
 
 داخل ملفات الـ workflow:
@@ -80,7 +80,10 @@ uv run apply.py <owner>/<repository> --check gitleaks --check semgrep --check "R
 ## 6. ما هو مبرمج وما هو مطبّق فعلياً وما بقي
 
 - **في الكود والإعدادات:** يبني `apply.py` قاعدة `required_signatures` عندما يكون `require_signed_commits: true`، ويبني فحوص CI المطلوبة فقط من الأسماء الممررة عبر `--check`.
-- **الحالة الحية السابقة:** تحققت التواقيع والفحوص الثلاثة مع strict=true ومصدر GitHub Actions. إعدادات SHA وحل محادثات المراجعة وCode scanning الجديدة تحتاج تطبيق المرحلة الثانية والتحقق، ولا توصف بأنها مفعلة لمجرد وجودها في الملفات.
+- **الحالة الحية في تدقيق 2 نوفمبر 2026:** لا يفرض ruleset التوقيع؛ فرض SHA مفعّل. أسماء الفحوص المطلوبة التي تم التحقق منها هي gitleaks وsemgrep وRegression and consistency checks فقط. OSV وTrivy وpre-commit وbenchmark ليست Required Status Checks في الحالة التي راجعناها؛ لا توصف بأنها مانعة للدمج قبل تفعيلها والتحقق من أسمائها الحية. فحص PR للـbenchmark لا ينشر baseline؛ النشر مسموح فقط على push إلى main بصلاحية contents:write.
 - **التوقيع:** إعداد مفتاح SSH يشرح طريقة الإعداد فقط؛ لا يثبت أن كل commits التاريخية موقعة. `required_signatures` يفرض شرط التوقيع على التحديثات التي يغطيها ruleset بعد تفعيله، ولا يغيّر توقيعات التاريخ السابق.
-- **تثبيت Actions بـSHA:** مراجع القوالب والنسخ العاملة مثبتة، وأزيل استثناء Semgrep للوسوم. فحص دائم في CI يمنع عودة مراجع متحركة. يجب مزامنة القوالب عند تحديث Dependabot قبل دمج التحديث، وتفعيل سياسة المنع بعد وصول الملفات إلى main.
+- **تثبيت Actions بـSHA:** مراجع القوالب والنسخ العاملة مثبتة، وأزيل استثناء Semgrep للوسوم. فحص دائم في CI يمنع عودة المراجع المتحركة؛ وسياسة GitHub الحية في المستودع المرجعي ترفض المراجع غير المثبتة. يجب مزامنة القوالب عند تحديث Dependabot قبل دمج التحديث، والتحقق من السياسة في كل مستودع هدف.
 - **غير مؤكد:** توافر/تفعيل immutable releases في الحساب لم يُتحقق منه.
+- **إصدارات الفحص:** OSV-Scanner `2.7.0` وTrivy `0.76.1` مثبتان بصور digest معروفة؛ لم أرفعهما إلى major بصورة عمياء. يعمل OSV وTrivy في سجل الوظيفة وملف التقرير بدلاً من SARIF لأن Code Scanning غير متاح افتراضياً للمستودعات الخاصة على GitHub Free/Pro.
+- **صورة Trivy:** مثبتة بالـdigest المعتمد لـlinux/amd64، مع `--exit-code 1` عند وجود ثغرات.
+- **Mutation testing:** آخر تشغيل موثق هو `345 killed` و`143 survived`. النتيجة إشارية وليست بوابة دمج؛ اختيار حدّ نجاة يحتاج قراراً منفصلاً ولا يُفترض تلقائياً.

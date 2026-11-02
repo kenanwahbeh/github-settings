@@ -24,3 +24,6 @@ jobs:
       - name: Run pre-commit
         if: ${{ hashFiles('.pre-commit-config.yaml') != '' }}
         run: pre-commit run --all-files --show-diff-on-failure
+      - name: Report pre-commit status
+        if: ${{ hashFiles('.pre-commit-config.yaml') == '' }}
+        run: 'echo "::notice::Pre-commit checks not applicable: no .pre-commit-config.yaml was found."'
