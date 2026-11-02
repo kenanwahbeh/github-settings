@@ -325,7 +325,7 @@ def main():
         try:
             result = gh("-X", "PATCH", f"repos/{repo}", body={"security_and_analysis": analysis}, dry_run=dry)
         except RuntimeError as error:
-            if "HTTP 403" in str(error) or "HTTP 404" in str(error):
+            if any(code in str(error) for code in ("HTTP 403", "HTTP 404", "HTTP 422")):
                 print("  Secret scanning is unavailable on this repository; nothing to change")
                 return
             raise
