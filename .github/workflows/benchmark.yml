@@ -12,19 +12,22 @@ permissions:
   pull-requests: write   # for benchmark comment
 jobs:
   benchmark:
-    if: ${{ hashFiles('**/*benchmark*.py') != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        if: ${{ hashFiles('**/*benchmark*.py') != '' }}
         with:
           python-version: "3.12"
       - name: Install dependencies
+        if: ${{ hashFiles('**/*benchmark*.py') != '' }}
         run: python -m pip install --disable-pip-version-check pytest pytest-benchmark pyyaml
       - name: Run benchmarks
+        if: ${{ hashFiles('**/*benchmark*.py') != '' }}
         run: pytest --benchmark-only --benchmark-autosave --benchmark-json=.benchmarks/current.json
       - name: Compare and comment
+        if: ${{ hashFiles('**/*benchmark*.py') != '' }}
         uses: benchmark-action/github-action-benchmark@49efc295c639840069791d8d1f47a24b5e8c7f34 # v1.6.1
         with:
           tool: 'pytest'

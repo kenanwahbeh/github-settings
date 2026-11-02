@@ -13,20 +13,22 @@ permissions:
   security-events: write
 jobs:
   trivy-image:
-    if: ${{ hashFiles('Dockerfile') != '' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Build image
+        if: ${{ hashFiles('Dockerfile') != '' }}
         run: |
           docker build -t local/app:test .
       - uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # 0.28.0
+        if: ${{ hashFiles('Dockerfile') != '' }}
         with:
           image-ref: 'local/app:test'
           format: 'sarif'
           output: 'trivy-image.sarif'
           severity: 'CRITICAL,HIGH,MEDIUM'
       - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v3
+        if: ${{ hashFiles('Dockerfile') != '' }}
         with:
           sarif_file: trivy-image.sarif
           category: trivy-image

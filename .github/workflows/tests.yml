@@ -13,7 +13,6 @@ permissions:
 jobs:
   regression-and-consistency:
     name: Regression and consistency checks
-    if: ${{ hashFiles('scripts/**', 'tests/**', '*.py', '*.yml') != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
