@@ -42,6 +42,7 @@ jobs:
   create:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Validate inputs
         env:
           REPOSITORY: ${{ inputs.repository }}
@@ -72,6 +73,15 @@ jobs:
             --argjson private "$([[ "$VISIBILITY" == private ]] && echo true || echo false)" \
             '{owner:$owner,name:$name,description:$description,private:$private,include_all_branches:false}')
           gh api "repos/$TEMPLATE/generate" --method POST --input - <<< "$payload"
+      - name: Apply repository settings
+        env:
+          GH_TOKEN: ${{ secrets.REPO_CREATION_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPOSITORY: ${{ inputs.repository }}
+        run: |
+          repo="$OWNER/$REPOSITORY"
+          uv run apply.py "$repo" --dry-run
+          uv run apply.py "$repo"
       - name: Dispatch bootstrap
         env:
           GH_TOKEN: ${{ secrets.REPO_CREATION_TOKEN }}
