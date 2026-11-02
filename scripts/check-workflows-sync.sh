@@ -6,7 +6,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 status=0
-for pair in secrets semgrep; do
+for pair in secrets semgrep semgrep-extended pre-commit deps-sca container-security mutation-testing benchmark; do
     if ! diff -q "workflows/${pair}.yml" ".github/workflows/${pair}.yml" >/dev/null; then
         echo "✗ drift: workflows/${pair}.yml != .github/workflows/${pair}.yml"
         diff -u "workflows/${pair}.yml" ".github/workflows/${pair}.yml" || true

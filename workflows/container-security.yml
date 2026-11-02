@@ -1,0 +1,31 @@
+# Container image security — Trivy scans the built Docker image.
+# Requires a Dockerfile in the repository root (or set DOCKERFILE_PATH).
+# Uploads SARIF to GitHub Security tab.
+# Actions are pinned to full commit SHAs.
+name: container-security
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+  security-events: write
+jobs:
+  trivy-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Build image
+        run: |
+          docker build -t local/app:test .
+      - uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # 0.28.0
+        with:
+          image-ref: 'local/app:test'
+          format: 'sarif'
+          output: 'trivy-image.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v3
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image

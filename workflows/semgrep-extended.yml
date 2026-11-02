@@ -1,0 +1,24 @@
+# Extended Semgrep rules for private repositories — runs in place of CodeQL.
+# Rule packs: https://semgrep.dev/explore
+# Actions are pinned to full commit SHAs. Dependabot updates the active
+# workflows; update the matching templates in the same pull request.
+name: semgrep-extended
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  semgrep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - run: >-
+          uvx semgrep==1.179.0 scan --metrics off --error
+          --config p/default --config p/secrets
+          --config p/python --config p/ci
+          --config p/opensecrets --config p/r2c-security-audit
+          .
