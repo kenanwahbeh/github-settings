@@ -70,7 +70,7 @@ ruleset:
         alerts_threshold: errors
         security_alerts_threshold: high_or_higher
   allowed_merge_methods: [squash]
-  require_signed_commits: true
+  require_signed_commits: false   # bootstrap commits are created by GitHub Actions
   keep_existing_rules: [required_status_checks, code_scanning]
 
 # A ruleset on release tags: a published version can neither move nor vanish.
