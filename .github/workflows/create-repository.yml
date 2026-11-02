@@ -91,6 +91,7 @@ jobs:
           AI_REVIEW: ${{ inputs.ai_review }}
         run: |
           for attempt in {1..12}; do
+            : "$attempt"
             if gh api "repos/$OWNER/$REPOSITORY/actions/workflows/bootstrap.yml/dispatches" \
               --method POST -f ref=main -f "inputs[preset]=$PRESET" -f "inputs[ai_review]=$AI_REVIEW"; then
               exit 0
