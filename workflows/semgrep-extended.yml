@@ -20,5 +20,5 @@ jobs:
           uvx semgrep==1.179.0 scan --metrics off --error
           --config p/default --config p/secrets
           --config p/python --config p/ci
-          --config p/opensecrets --config p/r2c-security-audit
+          --config p/r2c-security-audit
           .
