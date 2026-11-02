@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["pyyaml"]
+# dependencies = ["pyyaml==6.0.3"]
 # ///
 """Apply settings.yml to one repository with the gh CLI.
 

@@ -35,10 +35,11 @@ permissions:
 
 jobs:
   create:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    environment: repository-creation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - name: Validate inputs
         env:
           REPOSITORY: ${{ inputs.repository }}
@@ -76,8 +77,9 @@ jobs:
           REPOSITORY: ${{ inputs.repository }}
         run: |
           repo="$OWNER/$REPOSITORY"
-          uv run apply.py "$repo" --dry-run
-          uv run apply.py "$repo"
+          python -m pip install --disable-pip-version-check --require-hashes -r tests/requirements.txt
+          python apply.py "$repo" --dry-run
+          python apply.py "$repo"
       - name: Dispatch bootstrap
         env:
           GH_TOKEN: ${{ secrets.REPO_CREATION_TOKEN }}
@@ -86,7 +88,7 @@ jobs:
           PRESET: ${{ inputs.preset }}
         run: |
           for attempt in {1..12}; do
-            : "$attempt"
+            echo "Dispatch attempt $attempt"
             if gh api "repos/$OWNER/$REPOSITORY/actions/workflows/bootstrap.yml/dispatches" \
               --method POST -f ref=main -f "inputs[preset]=$PRESET"; then
               exit 0
@@ -94,4 +96,25 @@ jobs:
             sleep 5
           done
           echo "Could not dispatch bootstrap workflow" >&2
+          exit 1
+
+      - name: Open bootstrap pull request
+        env:
+          GH_TOKEN: ${{ secrets.REPO_CREATION_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPOSITORY: ${{ inputs.repository }}
+          PRESET: ${{ inputs.preset }}
+        run: |
+          for attempt in {1..24}; do
+            echo "Waiting for bootstrap branch, attempt $attempt"
+            if gh api "repos/$OWNER/$REPOSITORY/git/ref/heads/bootstrap/$PRESET" >/dev/null 2>&1; then
+              gh pr create --repo "$OWNER/$REPOSITORY" \
+                --base main --head "bootstrap/$PRESET" \
+                --title "chore: initialize $PRESET project" \
+                --body "Initial project bootstrap generated from the repository template."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Bootstrap branch was not created in time" >&2
           exit 1

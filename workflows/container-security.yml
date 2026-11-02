@@ -20,6 +20,17 @@ jobs:
         if: ${{ hashFiles('Dockerfile') != '' }}
         run: |
           docker build -t local/app:test .
-      - name: Report scanner requirement
+      - name: Scan image with Trivy
         if: ${{ hashFiles('Dockerfile') != '' }}
-        run: echo "Docker image built; configure a SHA-compatible Trivy runner for image scanning."
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD:/work" \
+            aquasec/trivy:0.69.0 image local/app:test \
+            --format sarif --output /work/trivy-results.sarif \
+            --exit-code 1 --ignore-unfixed
+      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v3
+        if: ${{ hashFiles('Dockerfile') != '' && always() }}
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-image

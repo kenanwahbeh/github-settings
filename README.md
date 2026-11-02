@@ -1,5 +1,7 @@
 # قالب إعدادات GitHub ودليل وكيل البرمجة
 
+[إنشاء مستودع جديد من القالب](https://github.com/kenanwahbeh/github-settings/actions/workflows/create-repository.yml)
+
 هذا المستودع يؤدي وظيفتين منفصلتين:
 1. **مستودع مرجعي لإعدادات GitHub**: يطبّق `settings.yml` عبر `apply.py` عند الطلب.
 2. **مرجع لقواعد وكيل البرمجة**: يوفّر تعليمات عامة ومعايير للكود والأمان والاختبارات.
