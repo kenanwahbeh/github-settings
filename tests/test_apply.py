@@ -618,6 +618,13 @@ class TestAiScan(unittest.TestCase):
         self.assertIn("AI Scan [not-available]", rendered)
         self.assertNotIn("✓", rendered)
 
+    def test_success_does_not_log_action_return_value(self):
+        with mock.patch("builtins.print") as output:
+            self.assertTrue(apply.step("Secret scanning", lambda: "sensitive-response-value"))
+        rendered = " ".join(str(call.args[0]) for call in output.call_args_list)
+        self.assertIn("✓ Secret scanning", rendered)
+        self.assertNotIn("sensitive-response-value", rendered)
+
     def test_other_errors_still_fail(self):
         with mock.patch.object(apply, "gh", side_effect=RuntimeError("HTTP 500: server error")):
             with self.assertRaisesRegex(RuntimeError, "HTTP 500"):

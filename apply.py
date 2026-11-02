@@ -85,8 +85,9 @@ def step(name, action):
         if result == "not-available":
             print(f"! {name} [not-available]")
         else:
-            suffix = f" [{result}]" if isinstance(result, str) else ""
-            print(f"✓ {name}{suffix}")
+            # Do not print action return values: API-derived strings may contain
+            # credentials or other sensitive response data. Log only the fixed step name.
+            print(f"✓ {name}")
     except RuntimeError as error:
         print(f"✗ {name}: {error}")
         return False
