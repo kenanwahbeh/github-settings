@@ -15,7 +15,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   bootstrap:
@@ -35,11 +34,3 @@ jobs:
           git add project.yml README.md
           git commit -m "chore: initialize project preset"
           git push --set-upstream origin "bootstrap/$PRESET"
-      - name: Open bootstrap pull request
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PRESET: ${{ inputs.preset }}
-        run: >-
-          gh pr create --base main --head "bootstrap/$PRESET"
-          --title "chore: initialize $PRESET project"
-          --body "Initial project bootstrap generated from the repository template."
