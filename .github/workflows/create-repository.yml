@@ -88,7 +88,7 @@ jobs:
           PRESET: ${{ inputs.preset }}
         run: |
           for attempt in {1..12}; do
-            : "$attempt"
+            echo "Dispatch attempt $attempt"
             if gh api "repos/$OWNER/$REPOSITORY/actions/workflows/bootstrap.yml/dispatches" \
               --method POST -f ref=main -f "inputs[preset]=$PRESET"; then
               exit 0
