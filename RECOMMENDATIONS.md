@@ -27,15 +27,13 @@
 | Dependabot alerts + الرسم البياني للاعتماديات | ✅ | مجاني للخاص والعام |
 | Dependabot security updates | ✅ | |
 | **Dependabot version updates** (`.github/dependabot.yml`) | ✅ قالب | `templates/dependabot.yml`، يُضاف بـ PR. أهمها نظام `github-actions` لتحديث الـ Actions، مع `groups` و`cooldown` لتقليل الضجيج. |
-| Secret scanning + push protection | ✅ للعام، يُجرَّب للخاص | إضافة مدفوعة في الخاص، وبديله gitleaks |
+| Secret scanning + push protection | ✅ للعام، غير متاح افتراضياً للخاص | Gitleaks هو البديل المجاني للمستودعات الخاصة |
 | CodeQL (default setup) | ✅ للعام وفق الضبط | الخاص يحتاج أداة وخطة متاحتين؛ يمكن استخدام Semgrep كفحص CI |
 | حذف الفرع بعد الدمج، والدمج التلقائي | ✅ | |
 | السماح بطريقة دمج واحدة (squash فقط) | ✅ | `allow_squash_merge` و`allow_merge_commit` و`allow_rebase_merge` في `PATCH repos/{repo}` |
 | تعطيل ما لا تستعمله (wiki، projects) | ⚖ | `has_wiki` و`has_projects` |
 | `SECURITY.md` | ✅ قالب | `templates/SECURITY.md`، يُضاف بـ PR للعام. لا API. |
 | Private vulnerability reporting | ✅ للعام فقط | `PUT repos/{repo}/private-vulnerability-reporting` (مؤكد من التوثيق، يتطلب صلاحية admin). |
-| Dependency review (action) | ➕ للعام | مدفوع في الخاص |
-| AI Scan وCopilot (Autofix، cloud agent، code review) | ⛔ مستبعد | مدفوع ومحصّص؛ يُعطَّل بـ `ai_scan: false` (`PATCH repos/{repo}/code-scanning/ai-scan`). البديل المجاني: Gitleaks + Semgrep + CodeQL للعام، والذكاء الاصطناعي اختياري غير حاجز. |
 | فحص ملفات الـ workflows (actionlint) | ✅ | مجاني ومفتوح المصدر (MIT)، مثبت بالنسخة والبصمة في `scripts/tool-versions.cfg` ويُشغَّل داخل `tests.yml`. |
 
 ## 3. GitHub Actions

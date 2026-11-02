@@ -6,12 +6,11 @@ security:
   dependabot_alerts: true          # also turns on the dependency graph
   dependabot_security_updates: true
   # Tried on every repository. On a private one GitHub may refuse them
-  # (paid add-ons); apply.py then says so, and gitleaks covers the secrets.
+  # When unavailable, apply.py reports it and Gitleaks covers private repositories.
   secret_scanning: true
   secret_scanning_push_protection: true
   codeql_default_setup: public      # public repos use CodeQL; private repos use Semgrep below
-  # AI Scan (Copilot-powered code scanning) is metered and paid. Keep it off so
-  # no repository depends on an AI quota: false = ensure it is disabled.
+  # Keep AI-powered scanning disabled: false = ensure it is disabled.
   ai_scan: false
   gitleaks_workflow: private        # workflows/secrets.yml by a pull request: private, all or none
   # Tool versions inside the workflow shell commands (GITLEAKS_VERSION,

@@ -12,11 +12,6 @@ on:
           - python
           - nextjs
           - cloudflare-worker
-      ai_review:
-        description: "Enable optional Gemini review"
-        required: true
-        default: false
-        type: boolean
 
 permissions:
   contents: write
@@ -32,17 +27,12 @@ jobs:
       - name: Prepare bootstrap branch
         env:
           PRESET: ${{ inputs.preset }}
-          AI_REVIEW: ${{ inputs.ai_review }}
         run: |
           bash scripts/bootstrap-project.sh "$PRESET"
-          if [[ "$AI_REVIEW" == true ]]; then
-            mkdir -p .gemini
-            cp .gemini/config.example.yaml .gemini/config.yaml
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "bootstrap/$PRESET"
-          git add project.yml README.md .gemini/config.yaml 2>/dev/null || git add project.yml README.md
+          git add project.yml README.md
           git commit -m "chore: initialize project preset"
           git push --set-upstream origin "bootstrap/$PRESET"
       - name: Open bootstrap pull request
