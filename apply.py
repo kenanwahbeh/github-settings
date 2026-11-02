@@ -125,7 +125,16 @@ def set_action_sha_pinning(repo, required, default_branch, dry):
             # GitHub-managed dynamic scans have no repository workflow file.
             if not path.startswith(".github/workflows/"):
                 continue
-            result = gh(f"repos/{repo}/contents/{path}?ref={quote(default_branch, safe='')}")
+            try:
+                result = gh(f"repos/{repo}/contents/{quote(path, safe='/')}"
+                            f"?ref={quote(default_branch, safe='')}")
+            except RuntimeError as error:
+                # The workflow list spans branches, so a file that exists only
+                # on another branch has nothing to pin on the default branch.
+                if "HTTP 404" in str(error):
+                    print(f"  skipping {path}: not present on {default_branch}")
+                    continue
+                raise
             try:
                 document = yaml.safe_load(base64.b64decode(result["content"]).decode("utf-8"))
             except (ValueError, UnicodeError, yaml.YAMLError) as error:
@@ -200,6 +209,24 @@ def validate_code_scanning_tools(repo, body, default_branch):
     if missing:
         raise RuntimeError(f"No successful default-branch analysis for {sorted(missing)}; "
                            "configure scanning and verify it before requiring these tools")
+
+
+def set_ai_scan(repo, enabled, dry):
+    """Turn AI Scan (Copilot-powered code scanning) on or off.
+
+    GitHub meters AI Scan, so the free-only policy keeps it disabled. A
+    repository without GitHub Advanced Security answers 403/404: that is not a
+    failure, there is simply nothing to switch off there.
+    """
+    try:
+        gh("-X", "PATCH", f"repos/{repo}/code-scanning/ai-scan",
+           body={"pr_scan": "enabled" if enabled else "disabled"}, dry_run=dry)
+    except RuntimeError as error:
+        message = str(error)
+        if "HTTP 403" in message or "HTTP 404" in message:
+            print("  AI Scan is unavailable on this repository; nothing to change")
+            return
+        raise
 
 
 def upsert_ruleset(repo, body, dry, keep_rules=(), default_branch="main"):
@@ -308,6 +335,9 @@ def main():
     if wanted(security["codeql_default_setup"], public):
         ok &= step("CodeQL default setup", lambda: gh(
             "-X", "PATCH", f"repos/{repo}/code-scanning/default-setup", body={"state": "configured"}, dry_run=dry))
+    ai_scan = bool(security.get("ai_scan", False))
+    ok &= step(f"Code scanning: AI Scan {'enabled' if ai_scan else 'disabled'}",
+               lambda: set_ai_scan(repo, ai_scan, dry))
     if wanted(security["private_vulnerability_reporting"], public):
         ok &= step("Private vulnerability reporting", lambda: gh(
             "-X", "PUT", f"repos/{repo}/private-vulnerability-reporting", dry_run=dry))

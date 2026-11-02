@@ -35,6 +35,8 @@
 | `SECURITY.md` | ✅ قالب | `templates/SECURITY.md`، يُضاف بـ PR للعام. لا API. |
 | Private vulnerability reporting | ✅ للعام فقط | `PUT repos/{repo}/private-vulnerability-reporting` (مؤكد من التوثيق، يتطلب صلاحية admin). |
 | Dependency review (action) | ➕ للعام | مدفوع في الخاص |
+| AI Scan وCopilot (Autofix، cloud agent، code review) | ⛔ مستبعد | مدفوع ومحصّص؛ يُعطَّل بـ `ai_scan: false` (`PATCH repos/{repo}/code-scanning/ai-scan`). البديل المجاني: Gitleaks + Semgrep + CodeQL للعام، والذكاء الاصطناعي اختياري غير حاجز. |
+| فحص ملفات الـ workflows (actionlint) | ✅ | مجاني ومفتوح المصدر (MIT)، مثبت بالنسخة والبصمة في `scripts/tool-versions.cfg` ويُشغَّل داخل `tests.yml`. |
 
 ## 3. GitHub Actions
 

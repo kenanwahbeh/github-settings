@@ -17,6 +17,8 @@ while IFS= read -r line || [ -n "$line" ]; do
         gitleaks) marker="GITLEAKS_VERSION:"; pattern="GITLEAKS_VERSION: $version" ;;
         gitleaks_sha256) marker="GITLEAKS_SHA256:"; pattern="GITLEAKS_SHA256: $version" ;;
         semgrep)  marker="semgrep=="; pattern="semgrep==$version" ;;
+        actionlint) marker="ACTIONLINT_VERSION:"; pattern="ACTIONLINT_VERSION: $version" ;;
+        actionlint_sha256) marker="ACTIONLINT_SHA256:"; pattern="ACTIONLINT_SHA256: $version" ;;
         *) echo "? no known check for '$name'"; status=1; continue ;;
     esac
     found=0
