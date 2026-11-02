@@ -18,7 +18,6 @@
 ## مراجع المنصات
 - FastAPI: https://fastapi.tiangolo.com/ — عند استخدامه لبناء API.
 - Supabase: https://supabase.com/docs — عند استخدام خدمات Supabase فعلاً.
-- Cloudflare Workers AI: https://developers.cloudflare.com/workers-ai/
 - Cloudflare Workers: https://developers.cloudflare.com/workers/
 - Cloudflare Secrets: https://developers.cloudflare.com/workers/configuration/secrets/
 - GitHub REST API: https://docs.github.com/rest

@@ -13,7 +13,6 @@ automation:
   bootstrap_pull_request: true
   dependabot: true
   security_policy: true
-  ai_review: false
 
 presets:
   allowed_visibility:
