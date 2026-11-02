@@ -224,12 +224,17 @@ def set_ai_scan(repo, enabled, dry):
     endpoint does not return a reliable read-back status in the mutation response.
     """
     try:
-        gh("-X", "PATCH", f"repos/{repo}/code-scanning/ai-scan",
+        # The AI Scan endpoint is a recent preview API and requires an explicit
+        # version header; without it GitHub can respond with a misleading 404.
+        gh("-H", "Accept: application/vnd.github+json",
+           "-H", "X-GitHub-Api-Version: 2026-03-10",
+           "-X", "PATCH", f"repos/{repo}/code-scanning/ai-scan",
            body={"pr_scan": "enabled" if enabled else "disabled"}, dry_run=dry)
         return "preview" if dry else "applied"
     except RuntimeError as error:
         message = str(error)
-        if "AI Scan is not available for this repository's current plan" in message:
+        if ("AI Scan is not available for this repository's current plan" in message
+                or "GitHub Advanced Security is not enabled for this repository" in message):
             print("  AI Scan status=not-available; nothing to change")
             return "not-available"
         raise
@@ -241,7 +246,10 @@ def set_secret_scanning(repo, analysis, dry):
         result = gh("-X", "PATCH", f"repos/{repo}",
                     body={"security_and_analysis": analysis}, dry_run=dry)
     except RuntimeError as error:
-        if "Secret scanning is not available for this repository's current plan" in str(error):
+        message = str(error)
+        # GitHub currently returns this explicit message with HTTP 422 when the
+        # target repository's plan does not include Secret Scanning.
+        if "Secret scanning is not available for this repository" in message:
             print("  Secret scanning status=not-available; nothing to change")
             return "not-available"
         raise
