@@ -174,10 +174,10 @@ class TestBuildBranchRuleset(unittest.TestCase):
             (Path(__file__).resolve().parent.parent / "settings.yml").read_text()
         )["ruleset"]
 
-    def test_baseline_includes_signed_commits_and_pull_requests(self):
+    def test_baseline_includes_pull_requests_without_required_signatures(self):
         body = apply.build_branch_ruleset(self.settings)
         types = [rule["type"] for rule in body["rules"]]
-        self.assertIn("required_signatures", types)
+        self.assertNotIn("required_signatures", types)
         self.assertIn("pull_request", types)
         self.assertIn("deletion", types)
         self.assertIn("non_fast_forward", types)
@@ -193,7 +193,7 @@ class TestBuildBranchRuleset(unittest.TestCase):
             parameters["required_status_checks"],
             [{"context": name} for name in checks],
         )
-        self.assertIn("required_signatures", [rule["type"] for rule in body["rules"]])
+        self.assertNotIn("required_signatures", [rule["type"] for rule in body["rules"]])
 
     def test_explicit_checks_replace_the_check_list_not_other_rules(self):
         body = apply.build_branch_ruleset(self.settings, ["actual-ci-check"])
@@ -205,7 +205,7 @@ class TestBuildBranchRuleset(unittest.TestCase):
             "old-check",
             json.dumps(body),
         )
-        self.assertIn("required_signatures", [rule["type"] for rule in body["rules"]])
+        self.assertNotIn("required_signatures", [rule["type"] for rule in body["rules"]])
 
 
 class TestWriteDetection(unittest.TestCase):
