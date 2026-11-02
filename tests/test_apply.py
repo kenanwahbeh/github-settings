@@ -581,7 +581,10 @@ class TestAiScan(unittest.TestCase):
     def test_disabled_by_default(self):
         with mock.patch.object(apply, "gh", return_value={}) as gh:
             apply.set_ai_scan("o/r", False, True)
-        self.assertEqual(gh.call_args.args, ("-X", "PATCH", self.ENDPOINT))
+        self.assertEqual(gh.call_args.args, (
+            "-H", "Accept: application/vnd.github+json",
+            "-H", "X-GitHub-Api-Version: 2026-03-10",
+            "-X", "PATCH", self.ENDPOINT))
         self.assertEqual(gh.call_args.kwargs["body"], {"pr_scan": "disabled"})
         self.assertTrue(gh.call_args.kwargs["dry_run"])
 
@@ -592,10 +595,15 @@ class TestAiScan(unittest.TestCase):
         self.assertFalse(gh.call_args.kwargs["dry_run"])
 
     def test_repository_without_advanced_security_is_not_a_failure(self):
-        message = "HTTP 403: AI Scan is not available for this repository's current plan"
-        with mock.patch.object(apply, "gh", side_effect=RuntimeError(message)), \
-             mock.patch("builtins.print"):
-            self.assertEqual(apply.set_ai_scan("o/r", False, False), "not-available")
+        messages = (
+            "HTTP 403: AI Scan is not available for this repository's current plan",
+            "HTTP 403: GitHub Advanced Security is not enabled for this repository",
+        )
+        for message in messages:
+            with self.subTest(message=message), \
+                 mock.patch.object(apply, "gh", side_effect=RuntimeError(message)), \
+                 mock.patch("builtins.print"):
+                self.assertEqual(apply.set_ai_scan("o/r", False, False), "not-available")
 
     def test_status_distinguishes_verified_and_unavailable(self):
         with mock.patch.object(apply, "gh", return_value={}):
@@ -637,9 +645,14 @@ class TestSecretScanning(unittest.TestCase):
     def test_status_distinguishes_verified_and_unavailable(self):
         with mock.patch.object(apply, "gh", return_value={"security_and_analysis": self.ANALYSIS}):
             self.assertEqual(apply.set_secret_scanning("o/r", self.ANALYSIS, False), "verified")
-        message = "HTTP 403: Secret scanning is not available for this repository's current plan"
-        with mock.patch.object(apply, "gh", side_effect=RuntimeError(message)):
-            self.assertEqual(apply.set_secret_scanning("o/r", self.ANALYSIS, False), "not-available")
+        messages = (
+            "HTTP 403: Secret scanning is not available for this repository's current plan",
+            "HTTP 422: Secret scanning is not available for this repository.",
+        )
+        for message in messages:
+            with self.subTest(message=message), \
+                 mock.patch.object(apply, "gh", side_effect=RuntimeError(message)):
+                self.assertEqual(apply.set_secret_scanning("o/r", self.ANALYSIS, False), "not-available")
 
     def test_forbidden_not_found_and_invalid_errors_fail(self):
         for message in ("HTTP 403: permission denied", "HTTP 404: Not Found",
