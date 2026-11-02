@@ -75,8 +75,8 @@
 لهذا المستودع تحديداً، وبعد تأكيد الأسماء الفعلية، الأمر الكامل هو:
 
 ```bash
-uv run apply.py kenanwahbeh/github-settings --dry-run --check gitleaks --check semgrep --check "Regression and consistency checks"
-uv run apply.py kenanwahbeh/github-settings --check gitleaks --check semgrep --check "Regression and consistency checks"
+uv run apply.py <owner>/<repository> --dry-run --check gitleaks --check semgrep --check "Regression and consistency checks"
+uv run apply.py <owner>/<repository> --check gitleaks --check semgrep --check "Regression and consistency checks"
 ```
 
 ## 6. ما هو مبرمج وما هو مطبّق فعلياً وما بقي

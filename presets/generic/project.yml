@@ -1,0 +1,6 @@
+project:
+  type: generic
+  package_manager: none
+  test_command: ""
+  lint_command: ""
+  docker: false

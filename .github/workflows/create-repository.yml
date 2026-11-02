@@ -1,0 +1,91 @@
+name: create-repository
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: "New repository name"
+        required: true
+        type: string
+      description:
+        description: "Repository description"
+        required: false
+        type: string
+      visibility:
+        description: "Repository visibility"
+        required: true
+        default: private
+        type: choice
+        options:
+          - private
+          - public
+      preset:
+        description: "Project preset"
+        required: true
+        default: generic
+        type: choice
+        options:
+          - generic
+          - python
+          - nextjs
+          - cloudflare-worker
+      ai_review:
+        description: "Enable optional Gemini review configuration"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate inputs
+        env:
+          REPOSITORY: ${{ inputs.repository }}
+          PRESET: ${{ inputs.preset }}
+          VISIBILITY: ${{ inputs.visibility }}
+        run: |
+          [[ "$REPOSITORY" =~ ^[A-Za-z0-9._-]{1,100}$ ]]
+          [[ "$PRESET" =~ ^(generic|python|nextjs|cloudflare-worker)$ ]]
+          [[ "$VISIBILITY" =~ ^(public|private)$ ]]
+          if [[ "$PRESET" == cloudflare-worker && "$VISIBILITY" != public ]]; then
+            echo "The cloudflare-worker preset is currently available for public repositories only" >&2
+            exit 1
+          fi
+      - name: Create repository from template
+        env:
+          GH_TOKEN: ${{ secrets.REPO_CREATION_TOKEN }}
+          TEMPLATE: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          REPOSITORY: ${{ inputs.repository }}
+          DESCRIPTION: ${{ inputs.description }}
+          VISIBILITY: ${{ inputs.visibility }}
+        run: |
+          test -n "$GH_TOKEN"
+          payload=$(jq -n \
+            --arg owner "$OWNER" \
+            --arg name "$REPOSITORY" \
+            --arg description "$DESCRIPTION" \
+            --argjson private "$([[ "$VISIBILITY" == private ]] && echo true || echo false)" \
+            '{owner:$owner,name:$name,description:$description,private:$private,include_all_branches:false}')
+          gh api "repos/$TEMPLATE/generate" --method POST --input - <<< "$payload"
+      - name: Dispatch bootstrap
+        env:
+          GH_TOKEN: ${{ secrets.REPO_CREATION_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPOSITORY: ${{ inputs.repository }}
+          PRESET: ${{ inputs.preset }}
+          AI_REVIEW: ${{ inputs.ai_review }}
+        run: |
+          for attempt in {1..12}; do
+            if gh api "repos/$OWNER/$REPOSITORY/actions/workflows/bootstrap.yml/dispatches" \
+              --method POST -f ref=main -f "inputs[preset]=$PRESET" -f "inputs[ai_review]=$AI_REVIEW"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Could not dispatch bootstrap workflow" >&2
+          exit 1

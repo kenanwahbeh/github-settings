@@ -1,4 +1,4 @@
-# Kinan's GitHub settings: applied to any of his repositories on request.
+# Reusable GitHub settings: apply to a selected repository on request.
 # Apply with: uv run apply.py <owner/repo> [--check <name> ...]
 # What has no API is listed under `manual` in README.md.
 
@@ -44,8 +44,8 @@ actions:
 # exact check names on a real PR. Supplying --check replaces the complete
 # required check names, preserving the live policy and retained source bindings.
 # Omitting --check preserves the complete live check rule.
-# For this repository, use the command documented in README.md to include
-# gitleaks, semgrep, and "Regression and consistency checks".
+# Pass the exact checks required by the target repository after verifying them
+# in a real pull request.
 # Ownership policy: settings.yml owns every rule EXCEPT types listed in
 # keep_existing_rules. Omitting --check keeps the live required_status_checks
 # rule; passing --check replaces its names while preserving policy and retained
@@ -85,7 +85,5 @@ tag_ruleset:
   block_update: true
   keep_existing_rules: []
 
-# Repositories that keep direct pushes to the default branch.
-ruleset_exclude:
-  - kenanwahbeh/kenanwahbeh
-  - kenanwahbeh/kenanwahbeh.github.io
+# Optional target-specific exclusions. Keep empty in the generic template.
+ruleset_exclude: []

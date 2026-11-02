@@ -1,0 +1,23 @@
+name: repository-template
+version: 1
+
+project:
+  type: generic
+  visibility: private
+  package_manager: none
+  test_command: ""
+  lint_command: ""
+  docker: false
+
+automation:
+  bootstrap_pull_request: true
+  dependabot: true
+  security_policy: true
+  ai_review: false
+
+presets:
+  allowed_visibility:
+    generic: [public, private]
+    python: [public, private]
+    nextjs: [public, private]
+    cloudflare-worker: [public]
