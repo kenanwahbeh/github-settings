@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: google/osv-scanner@037c3543ac60359190459b10fbb5331568b4c8f5 # v1.7.0
         with:
-          scan-args: "--recursive --format sarif --output osv.sarif ."
+          args: "--recursive --format sarif --output osv.sarif ."
       - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v3
         with:
           sarif_file: osv.sarif
