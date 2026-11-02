@@ -362,8 +362,14 @@ def main():
         ok &= step("CodeQL default setup", lambda: gh(
             "-X", "PATCH", f"repos/{repo}/code-scanning/default-setup", body={"state": "configured"}, dry_run=dry))
     ai_scan = bool(security.get("ai_scan", False))
-    ok &= step(f"Code scanning: AI Scan {'enabled' if ai_scan else 'disabled'}",
-               lambda: set_ai_scan(repo, ai_scan, dry))
+    owner_type = (info.get("owner") or {}).get("type")
+    if not public and owner_type == "User":
+        # GitHub does not support AI Scan for private repositories owned by
+        # personal accounts. Skip only this known-ineligible repository class.
+        print("! Code scanning: AI Scan [not-available for private personal repositories]")
+    else:
+        ok &= step(f"Code scanning: AI Scan {'enabled' if ai_scan else 'disabled'}",
+                   lambda: set_ai_scan(repo, ai_scan, dry))
     if wanted(security["private_vulnerability_reporting"], public):
         ok &= step("Private vulnerability reporting", lambda: gh(
             "-X", "PUT", f"repos/{repo}/private-vulnerability-reporting", dry_run=dry))
