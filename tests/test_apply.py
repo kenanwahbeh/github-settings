@@ -347,7 +347,7 @@ class TestMainFlow(unittest.TestCase):
     def responder(private=False, fail_rules=False):
         def respond(*args, **kwargs):
             if args == ("repos/o/r",):
-                return {"private": private}
+                return {"private": private, "owner": {"type": "User"}}
             if args[0].endswith("code-scanning/analyses?per_page=100"):
                 return [{"tool": {"name": "CodeQL"}, "ref": "refs/heads/main", "error": ""}]
             if args[0].endswith("actions/permissions") and len(args) == 1:
@@ -374,6 +374,13 @@ class TestMainFlow(unittest.TestCase):
                              not private)
             writes = [call for call in calls if call.args[:2] == ("-X", "POST")]
             self.assertEqual([call.kwargs["body"]["name"] for call in writes], ["main", "tags"])
+
+    def test_private_personal_repository_skips_unsupported_ai_scan(self):
+        code, calls, output = self.run_main(self.responder(private=True))
+        self.assertEqual(code, 0)
+        self.assertFalse(any(call.args[-1] == "repos/o/r/code-scanning/ai-scan" for call in calls))
+        rendered = " ".join(str(call.args[0]) for call in output.call_args_list)
+        self.assertIn("not-available for private personal repositories", rendered)
 
     def test_ai_scan_is_disabled_by_the_default_policy(self):
         code, calls, _ = self.run_main(self.responder())
