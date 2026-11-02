@@ -48,7 +48,7 @@ uv run apply.py kenanwahbeh/github-settings --check gitleaks --check semgrep --c
 3. إضافة `templates/dependabot.yml` (باسم `.github/dependabot.yml` مع منظومات المشروع) و`templates/SECURITY.md` (للمستودعات العامة) في نفس الـ Pull Request.
 4. الإبلاغ عن بنود "إعدادات حساب لا تتوفر لها API مناسبة" أدناه يدوياً بدل محاولة أتمتتها.
 
-**اختبارات الأداة**: `uv run --with pyyaml python tests/test_apply.py` — بلا شبكة ولا حاجة لـ `gh`. (الأمر المباشر `python3 tests/test_apply.py` يعمل فقط إذا كانت PyYAML متوفرة في البيئة، لأن `apply.py` يستوردها؛ لا توجد ملفات متطلبات مثبّتة في هذا المستودع.)
+**اختبارات الأداة**: `uv run --with pyyaml python tests/test_apply.py` — بلا شبكة ولا حاجة لـ `gh`. (الأمر المباشر `python3 tests/test_apply.py` يعمل فقط إذا كانت PyYAML متوفرة في البيئة، لأن `apply.py` يستوردها. اعتماد الاختبار الوحيد مثبّت بالنسخة والبصمة في `tests/requirements.txt`، ويثبّته `tests.yml` بـ `--require-hashes`.)
 **فحوص الدفعة**: `bash scripts/check-workflows-sync.sh && bash scripts/check-tool-versions.sh` — القيم المثبتة داخل أوامر shell (`GITLEAKS_VERSION` ونسخة Semgrep) مصدرُها الوحيد `scripts/tool-versions.cfg`؛ حدّثه مع الملفين عند كل ترقية.
 
 ## ما الذي تضبطه الأداة؟
@@ -64,8 +64,26 @@ uv run apply.py kenanwahbeh/github-settings --check gitleaks --check semgrep --c
 | ruleset للفرع الافتراضي ووسوم `v*` | نعم | نعم |
 | صلاحيات GitHub Actions الافتراضية | قراءة فقط | قراءة فقط |
 | Private vulnerability reporting | نعم | غير متاح بهذه السياسة |
+| AI Scan (Copilot) | معطّل | معطّل |
 
 القيم الفعلية في [settings.yml](settings.yml)، والتفاصيل والخيارات التي لم تُعتمد في [RECOMMENDATIONS.md](RECOMMENDATIONS.md). المستودعات المذكورة في `ruleset_exclude` مستثناة من ruleset الفرع الافتراضي فقط؛ تبقى بقية الإعدادات وقاعدة الوسوم مطبقة.
+
+## الحد الأدنى المجاني: لا ميزة مدفوعة
+
+هذا المستودع نموذج يُنسخ لكل مستودع جديد: كل ما يفعّله مجاني أو مفتوح المصدر، ولا يعتمد على أي حصة ذكاء اصطناعي. المفتاح `ai_scan: false` في `settings.yml` يُبقي AI Scan معطّلاً على كل مستودع يُطبَّق عليه، فلا تفشل الفحوص عند نفاد الحصة.
+
+| الطبقة | الأداة | الترخيص أو التكلفة |
+|---|---|---|
+| الأسرار | Gitleaks | MIT |
+| الفحص الثابت | Semgrep OSS (`p/default`, `p/secrets`) | LGPL-2.1 |
+| تحليل الكود | CodeQL default setup | مجاني للمستودعات العامة |
+| فحص ملفات الـ workflows | actionlint | MIT |
+| الاختبارات | pytest عبر `tests/test_apply.py` | MIT |
+| الاعتماديات | Dependabot (alerts وsecurity updates وversion updates) | مجاني |
+
+**ما لا يُستخدم عمداً:** AI Scan، Copilot Autofix، Copilot cloud agent، Copilot code review، Dependency review action في المستودعات الخاصة، وSecret scanning وpush protection في المستودعات الخاصة. البديل عن كل منها موجود في الجدول أعلاه، وأي طبقة ذكاء اصطناعي تبقى اختيارية وغير حاجزة (انظر [docs/cloudflare-workers-ai.md](docs/cloudflare-workers-ai.md)).
+
+**التحقق بعد التطبيق:** يجب أن يعيد `gh api repos/<owner>/<repo>/code-scanning/ai-scan` القيمة `{"pr_scan":"disabled"}`. على مستودع بلا GitHub Advanced Security يعيد الطلب 403 أو 404، ويعتبره `apply.py` «لا شيء لتعطيله» بدل أن يفشل.
 
 ## ملفات تُضاف إلى المستودعات المستهدفة عند الحاجة
 

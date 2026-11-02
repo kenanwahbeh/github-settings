@@ -375,6 +375,14 @@ class TestMainFlow(unittest.TestCase):
             writes = [call for call in calls if call.args[:2] == ("-X", "POST")]
             self.assertEqual([call.kwargs["body"]["name"] for call in writes], ["main", "tags"])
 
+    def test_ai_scan_is_disabled_by_the_default_policy(self):
+        code, calls, _ = self.run_main(self.responder())
+        self.assertEqual(code, 0)
+        patches = [call for call in calls if call.args[-1] == "repos/o/r/code-scanning/ai-scan"]
+        self.assertEqual(len(patches), 1)
+        self.assertEqual(patches[0].args[:2], ("-X", "PATCH"))
+        self.assertEqual(patches[0].kwargs["body"], {"pr_scan": "disabled"})
+
     def test_read_failure_after_changes_exits_nonzero_and_summarizes(self):
         code, calls, output = self.run_main(self.responder(fail_rules=True))
         self.assertEqual(code, 1)
@@ -497,6 +505,35 @@ class TestSecurityPolicy(unittest.TestCase):
         self.assertEqual(gh.call_count, 3)
         self.assertFalse(any(call.args[0] == "-X" for call in gh.call_args_list))
 
+    def test_workflow_path_is_url_encoded(self):
+        # '?' and '#' are legal in a git path but would truncate the API path
+        # and could override the ref= query parameter, so encode the path too.
+        content = apply.base64.b64encode(b"jobs: {}").decode()
+        responses = [{"enabled": True},
+                     {"total_count": 1, "workflows": [{"path": ".github/workflows/a?ref=evil.yml"}]},
+                     {"content": content}, {}]
+        with mock.patch.object(apply, "gh", side_effect=responses) as gh:
+            apply.set_action_sha_pinning("o/r", True, "main", True)
+        url = gh.call_args_list[2].args[0]
+        self.assertIn("a%3Fref%3Devil.yml", url)
+        self.assertTrue(url.endswith("?ref=main"), url)
+
+    def test_workflow_only_on_another_branch_is_skipped(self):
+        # The workflow list spans branches; a file missing on the default branch
+        # must not block enforcement (it would 404 on the contents read).
+        content = apply.base64.b64encode(b"jobs: {test: {steps: [{uses: 'actions/checkout@" +
+                                        b"a" * 40 + b"'}]}}").decode()
+        responses = [{"enabled": True},
+                     {"total_count": 2, "workflows": [{"path": ".github/workflows/gone.yml"},
+                                                      {"path": ".github/workflows/test.yml"}]},
+                     RuntimeError("gh: Not Found (HTTP 404)"),
+                     {"content": content}, {}]
+        with mock.patch.object(apply, "gh", side_effect=responses) as gh, \
+             mock.patch("builtins.print"):
+            apply.set_action_sha_pinning("o/r", True, "main", True)
+        self.assertEqual(gh.call_args.args[:2], ("-X", "PUT"))
+        self.assertTrue(gh.call_args.kwargs["body"]["sha_pinning_required"])
+
     def test_incomplete_workflow_list_blocks_enforcement(self):
         with mock.patch.object(apply, "gh", side_effect=[{"enabled": True}, {"total_count": 101}]):
             with self.assertRaisesRegex(RuntimeError, "all pages"):
@@ -536,6 +573,36 @@ class TestScanningPreflight(unittest.TestCase):
                 [{"id": 7, "name": "main"}], {"rules": [previous]}, {}]) as gh:
             self.assertTrue(apply.upsert_ruleset("o/r", body, True, keep_rules=("code_scanning",)))
         self.assertIn(previous, gh.call_args.kwargs["body"]["rules"])
+
+
+class TestAiScan(unittest.TestCase):
+    ENDPOINT = "repos/o/r/code-scanning/ai-scan"
+
+    def test_disabled_by_default(self):
+        with mock.patch.object(apply, "gh", return_value={}) as gh:
+            apply.set_ai_scan("o/r", False, True)
+        self.assertEqual(gh.call_args.args, ("-X", "PATCH", self.ENDPOINT))
+        self.assertEqual(gh.call_args.kwargs["body"], {"pr_scan": "disabled"})
+        self.assertTrue(gh.call_args.kwargs["dry_run"])
+
+    def test_enabled_when_configured(self):
+        with mock.patch.object(apply, "gh", return_value={}) as gh:
+            apply.set_ai_scan("o/r", True, False)
+        self.assertEqual(gh.call_args.kwargs["body"], {"pr_scan": "enabled"})
+        self.assertFalse(gh.call_args.kwargs["dry_run"])
+
+    def test_repository_without_advanced_security_is_not_a_failure(self):
+        for message in ("HTTP 403: GitHub Advanced Security is not enabled",
+                        "HTTP 404: Not Found"):
+            with self.subTest(message=message), \
+                 mock.patch.object(apply, "gh", side_effect=RuntimeError(message)), \
+                 mock.patch("builtins.print"):
+                apply.set_ai_scan("o/r", False, False)  # must not raise
+
+    def test_other_errors_still_fail(self):
+        with mock.patch.object(apply, "gh", side_effect=RuntimeError("HTTP 500: server error")):
+            with self.assertRaisesRegex(RuntimeError, "HTTP 500"):
+                apply.set_ai_scan("o/r", False, False)
 
 
 if __name__ == "__main__":
