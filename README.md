@@ -37,20 +37,20 @@ uv run apply.py <owner>/<repository> --check test
 - `nextjs`: مشروع Next.js يستخدم `npm`.
 - `cloudflare-worker`: مشروع Cloudflare Worker عام؛ لا يتيح الإنشاء الخاص حالياً.
 
-احفظ Fine-grained PAT أو GitHub App token باسم `REPO_CREATION_TOKEN` في Secrets الخاصة بهذا المستودع. يحتاج الرمز صلاحية إنشاء المستودعات وAdministrate repository على المستودع الجديد، لأن workflow يستخدمه لإنشاء المستودع ثم تطبيق `settings.yml` عليه. لا يُكتب الرمز داخل الملفات أو سجلات التشغيل. عند رفض Secret Scanning في مستودع خاص بسبب الخطة، يتابع التطبيق بقية الإعدادات ويترك Gitleaks بديلاً. بعد ذلك يشغّل workflow تهيئة لفتح Pull Request.
+احفظ Fine-grained PAT أو GitHub App token باسم `REPO_CREATION_TOKEN` في Secrets الخاصة بهذا المستودع. يحتاج الرمز صلاحية إنشاء المستودعات وAdministrate repository على المستودع الجديد، لأن workflow يستخدمه لإنشاء المستودع ثم تطبيق `settings.yml` عليه. لا يُكتب الرمز داخل الملفات أو سجلات التشغيل. إذا أعاد GitHub رسالة صريحة بأن Secret Scanning غير متاح ضمن خطة المستودع، يسجل التطبيق الحالة كـ not-available ويتابع مع Gitleaks بديلاً. أما نقص الصلاحيات أو أخطاء 403/404/422 غير الواضحة فتُعد فشلاً ولا تُخفى. بعد ذلك يشغّل workflow تهيئة لفتح Pull Request.
 
 قبل الاستخدام، فعّل **Template repository** من إعدادات هذا المستودع، وتأكد أن الرمز يملك إنشاء مستودعات تحت الحساب أو المنظمة المطلوبة. لا تستخدم `GITHUB_TOKEN` الخاص بالتشغيل لهذا الغرض؛ صلاحياته محصورة عادة بالمستودع الحالي. ينفذ workflow معاينة `--dry-run` ثم التطبيق الفعلي، بينما تبقى أسماء checks المطلوبة إعداداً لاحقاً بعد ظهورها في أول PR.
 
 ابدأ بـ `--dry-run` لمراجعة التغييرات؛ في هذا الوضع تنفّذ الأداة عمليات القراءة فقط وتعرض عمليات الكتابة دون تنفيذها (يتطلب اتصالاً و`gh` مصادقاً عليه وصلاحيات قراءة). يتحقق التطبيق من صيغة `owner/repository` قبل أي اتصال، ويرفض المسارات أو معاملات URL غير الصالحة. في وضع المعاينة لا تُنفّذ إلا طرق HTTP الآمنة المعروفة (`GET` و`HEAD` و`OPTIONS`)؛ أي طريقة أخرى أو خيار `-X` ناقص يُعامل كعملية كتابة ويُمنع تنفيذه. هذا دفاع احترازي حتى لا يؤدي إدخال طريقة HTTP جديدة إلى تنفيذ تغيير أثناء المعاينة. لا تمرّر `--check` إلا بأسماء فحوص CI ظهرت فعلاً في نتائج Pull Request، لأن الاسم الخاطئ قد يمنع الدمج. عند تمرير `--check` تصبح القائمة التي تمرّرها هي **القائمة الكاملة** للفحوص المطلوبة، وليست إضافة إلى القائمة الحية؛ لذلك أعد ذكر كل فحص تريد الإبقاء عليه. عند عدم تمريرها، يحافظ التطبيق على قاعدة الفحوص الحية كما هي. لا يفرض القالب توقيع commits لأن Bootstrap ينشئ commits عبر GitHub Actions.
 
-**مزامنة قواعد الحماية لهذا المستودع نفسه:** أسماء الفحوص التي يجب أن تمنع الدمج هي `gitleaks` و`semgrep` و`Regression and consistency checks`. بعد التحقق من ظهورها في Checks، راجع المعاينة ثم طبّقها بالأمر التالي؛ هذا يستبدل قائمة الفحوص المطلوبة بهذه الثلاثة مع الاحتفاظ ببقية قواعد الحماية التي يبنيها الإعداد:
+**حالة بوابة الدمج الحية في تدقيق 2 نوفمبر 2026:** الفحوص المطلوبة حالياً هي `gitleaks` و`semgrep` و`Regression and consistency checks`. فحص OSV أصبح يعمل باسم `osv-scanner` لكنه لم يُضف بعد إلى قواعد الدمج الحية لأن النشر متوقف. عند استئناف تطبيق سياسة الدمج، أضف `osv-scanner` بعد تأكيد ظهوره في Checks. أضف `trivy-image` فقط للمشاريع التي تحتوي Dockerfile وتريد فرض فحص صورها. لا تضف benchmark أو pre-commit كفحوص إلزامية لمجرد وجود Workflow اختياري.
 
 ```bash
-uv run apply.py <owner>/<repository> --dry-run --check gitleaks --check semgrep --check "Regression and consistency checks"
-uv run apply.py <owner>/<repository> --check gitleaks --check semgrep --check "Regression and consistency checks"
+uv run apply.py <owner>/<repository> --dry-run --check gitleaks --check semgrep --check "Regression and consistency checks" --check osv-scanner
+uv run apply.py <owner>/<repository> --check gitleaks --check semgrep --check "Regression and consistency checks" --check osv-scanner
 ```
 
-لا تعتبر الفحوص مفروضة لمجرد وجودها في `settings.yml`: بعد التطبيق، افتح **Settings → Rules → main** وتحقق من قائمة الفحوص الثلاثة. سياسة ملكية القواعد موثّقة في تعليقات `settings.yml`: يستثني الفرع قاعدة `required_status_checks` من الاستبدال فقط عندما لا تمرر `--check`؛ أما قواعد الوسوم فتملكها `settings.yml` بالكامل.
+لا تعتبر الفحوص مفروضة لمجرد وجودها في ملفات Workflow أو `settings.yml`: بعد التطبيق، افتح **Settings → Rules → main** وتحقق من الأسماء الفعلية. المثال أعلاه يضيف OSV إلى القائمة؛ أما `trivy-image` فيضاف فقط لمشروع حاويات بعد التحقق منه. سياسة ملكية القواعد موثّقة في تعليقات `settings.yml`: يستثني الفرع قاعدة `required_status_checks` من الاستبدال فقط عندما لا تمرر `--check`؛ أما قواعد الوسوم فتملكها `settings.yml` بالكامل.
 
 **ملاحظة عن قوالب workflows:** `workflows/` هي القوالب التي تُنسخ إلى المستودعات المستهدفة، أما `.github/workflows/` فهي نسخة هذا المستودع العاملة لحماية نفسه بهما. يجب أن يبقى كل زوج متطابقاً؛ فحص `scripts/check-workflows-sync.sh` يمنع الانحراف. إصدارات الأدوات المكتوبة داخل أوامر shell (`GITLEAKS_VERSION`، ونسخة Semgrep في سطر `uvx`) لا يحدّثها Dependabot — قيمها مثبتة في `scripts/tool-versions.cfg` ويُحدَّث الملفان معاً عنده ثم يُتحقق بـ `scripts/check-tool-versions.sh`.
 
@@ -93,11 +93,12 @@ uv run apply.py <owner>/<repository> --check gitleaks --check semgrep --check "R
 | تحليل الكود | CodeQL default setup | مجاني للمستودعات العامة |
 | فحص ملفات الـ workflows | actionlint | MIT |
 | الاختبارات | pytest عبر `tests/test_apply.py` | MIT |
-| الاعتماديات | Dependabot (alerts وsecurity updates وversion updates) | مجاني |
+| الاعتماديات | Dependabot (alerts وsecurity updates وversion updates) + OSV-Scanner | مجاني ومفتوح المصدر |
+| صور الحاويات | Trivy | Apache-2.0، مجاني ومفتوح المصدر |
 
-**ما لا يُستخدم عمداً:** كل خدمات الذكاء الاصطناعي والمراجعة التجارية، وDependency review action، وميزات GitHub المدفوعة في المستودعات الخاصة. البدائل المجانية هي Gitleaks وSemgrep وOSV-Scanner والاختبارات المحلية.
+**ما لا يُستخدم عمداً:** كل خدمات الذكاء الاصطناعي والمراجعة التجارية، وDependency review action، وميزات GitHub المدفوعة في المستودعات الخاصة. البدائل المجانية هي Gitleaks وSemgrep وOSV-Scanner وTrivy والاختبارات المحلية. مخرجات OSV وTrivy تُطبع في سجلات Actions، ولا تُرفع بصيغة SARIF لأن Code Scanning غير متاح افتراضياً للمستودعات الخاصة على Free/Pro.
 
-**التحقق بعد التطبيق:** يجب أن يعيد `gh api repos/<owner>/<repo>/code-scanning/ai-scan` القيمة `{"pr_scan":"disabled"}`. على مستودع بلا GitHub Advanced Security يعيد الطلب 403 أو 404، ويعتبره `apply.py` «لا شيء لتعطيله» بدل أن يفشل.
+**التحقق بعد التطبيق:** يجب أن يعيد `gh api repos/<owner>/<repo>/code-scanning/ai-scan` القيمة `{"pr_scan":"disabled"}`. لا يصنّف `apply.py` كل 403/404 على أنها عدم توفر؛ لا يتابع دون فشل إلا عند رسالة GitHub الصريحة بأن الميزة غير متاحة ضمن الخطة. أخطاء الصلاحيات و404 الغامضة و422 validation تُبلّغ كفشل.
 
 ## ملفات تُضاف إلى المستودعات المستهدفة عند الحاجة
 
@@ -164,7 +165,7 @@ uv run apply.py <owner/repo> --check gitleaks --check semgrep
 1. **الكود أولاً:** تثبيت كل مراجع Actions الخارجية المباشرة بـSHA كامل في القوالب والنسخ العاملة؛ إزالة استثناء Semgrep للوسوم المتحركة؛ نجاح الاختبارات وفحص التزامن والإصدارات و`python scripts/check-action-pins.py` وCI على PR، ثم الدمج بعد الموافقة.
 2. **الحماية ثانياً:** بعد وصول الملفات المثبتة إلى الفرع الافتراضي، راجع `--dry-run` ثم طبّق السياسة بأسماء checks التي ظهرت فعلياً. افحص الحالة الحية بعدها؛ الأداة لا تغيّر الضبط في المعاينة.
 
-الأداة تفحص مراجع workflows المباشرة على الفرع الافتراضي قبل فرض `actions.sha_pinning_required`، وتحافظ على `enabled` و`allowed_actions` الحاليين. ترفض التفعيل عند وجود مراجع متحركة أو تعذر القراءة أو وجود أكثر من 100 workflow يحتاج مراجعة كاملة. هذا لا يفحص اعتماديات `run` أو التنفيذ الداخلي لكل Action؛ راجع أيضاً Actions المحلية المركبة عند وجودها. عند تحديث Dependabot للنسخ العاملة يجب تحديث القوالب المطابقة في PR نفسه؛ فحص التزامن يمنع دمج الانحراف.
+فرض `actions.sha_pinning_required` مفعّل في المستودع المرجعي بتاريخ 2 نوفمبر 2026. عند تطبيقه على مستودع هدف، تفحص الأداة مراجع workflows المباشرة على الفرع الافتراضي أولاً، وتحافظ على `enabled` و`allowed_actions` الحاليين. ترفض التفعيل عند وجود مراجع متحركة أو تعذر القراءة أو وجود أكثر من 100 workflow يحتاج مراجعة كاملة. هذا لا يفحص اعتماديات `run` أو التنفيذ الداخلي لكل Action؛ راجع أيضاً Actions المحلية المركبة عند وجودها. عند تحديث Dependabot للنسخ العاملة يجب تحديث القوالب المطابقة في PR نفسه؛ فحص التزامن يمنع دمج الانحراف.
 
 تضبط `ruleset` عدد الموافقات ومراجعة Code Owners والموافقة على آخر دفعة وإلغاء الموافقات القديمة وحل محادثات المراجعة. السياسة الحالية لهذا المرجع تلزم حل المحادثات وتلغي الموافقات القديمة، دون فرض عدد بشري يناسب كل العملاء. استخدم `--settings <policy.yml>` لسياسة خاصة بالمستودع بعد نسخ الإعدادات ومراجعتها؛ لا تطبق قالباً مركزياً على عميل دون معاينة وتفويض.
 

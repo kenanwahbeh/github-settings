@@ -81,8 +81,12 @@ def gh(*args, body=None, dry_run=False):
 
 def step(name, action):
     try:
-        action()
-        print(f"✓ {name}")
+        result = action()
+        if result == "not-available":
+            print(f"! {name} [not-available]")
+        else:
+            suffix = f" [{result}]" if isinstance(result, str) else ""
+            print(f"✓ {name}{suffix}")
     except RuntimeError as error:
         print(f"✗ {name}: {error}")
         return False
@@ -215,18 +219,39 @@ def set_ai_scan(repo, enabled, dry):
     """Turn AI Scan (Copilot-powered code scanning) on or off.
 
     GitHub meters AI Scan, so the free-only policy keeps it disabled. A
-    repository without GitHub Advanced Security answers 403/404: that is not a
-    failure, there is simply nothing to switch off there.
+    successful PATCH is reported as applied rather than verified because this
+    endpoint does not return a reliable read-back status in the mutation response.
     """
     try:
         gh("-X", "PATCH", f"repos/{repo}/code-scanning/ai-scan",
            body={"pr_scan": "enabled" if enabled else "disabled"}, dry_run=dry)
+        return "preview" if dry else "applied"
     except RuntimeError as error:
         message = str(error)
-        if "HTTP 403" in message or "HTTP 404" in message:
-            print("  AI Scan is unavailable on this repository; nothing to change")
-            return
+        if "AI Scan is not available for this repository's current plan" in message:
+            print("  AI Scan status=not-available; nothing to change")
+            return "not-available"
         raise
+
+
+def set_secret_scanning(repo, analysis, dry):
+    """Enable secret scanning and report verified, unavailable, or raise on failure."""
+    try:
+        result = gh("-X", "PATCH", f"repos/{repo}",
+                    body={"security_and_analysis": analysis}, dry_run=dry)
+    except RuntimeError as error:
+        if "Secret scanning is not available for this repository's current plan" in str(error):
+            print("  Secret scanning status=not-available; nothing to change")
+            return "not-available"
+        raise
+    if dry:
+        return "preview"
+    statuses = {name: (result.get("security_and_analysis") or {}).get(name, {}).get("status")
+                for name in analysis}
+    if any(status != "enabled" for status in statuses.values()):
+        raise RuntimeError(f"GitHub did not enable it: {statuses}")
+    print("  Secret scanning status=verified")
+    return "verified"
 
 
 def upsert_ruleset(repo, body, dry, keep_rules=(), default_branch="main"):
@@ -321,23 +346,9 @@ def main():
     if security["secret_scanning_push_protection"]:
         analysis["secret_scanning_push_protection"] = {"status": "enabled"}
 
-    def secret_scanning():
-        try:
-            result = gh("-X", "PATCH", f"repos/{repo}", body={"security_and_analysis": analysis}, dry_run=dry)
-        except RuntimeError as error:
-            if any(code in str(error) for code in ("HTTP 403", "HTTP 404", "HTTP 422")):
-                print("  Secret scanning is unavailable on this repository; nothing to change")
-                return
-            raise
-        if dry:
-            return
-        statuses = {name: (result.get("security_and_analysis") or {}).get(name, {}).get("status")
-                    for name in analysis}
-        if any(status != "enabled" for status in statuses.values()):
-            raise RuntimeError(f"GitHub did not enable it: {statuses}")
-
     if analysis:
-        ok &= step("Secret scanning and push protection", secret_scanning)
+        ok &= step("Secret scanning and push protection",
+                   lambda: set_secret_scanning(repo, analysis, dry))
     if wanted(security["codeql_default_setup"], public):
         ok &= step("CodeQL default setup", lambda: gh(
             "-X", "PATCH", f"repos/{repo}/code-scanning/default-setup", body={"state": "configured"}, dry_run=dry))
