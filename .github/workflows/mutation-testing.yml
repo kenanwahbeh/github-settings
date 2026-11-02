@@ -23,7 +23,7 @@ jobs:
         run: python -m pip install --disable-pip-version-check mutmut==2.4.3
       - name: Run mutation testing
         run: |
-          mutmut run --paths-to-mutate=. --tests-dir=tests --runner="python -m pytest -x" --timeout-factor=3
+          mutmut run --paths-to-mutate=. --tests-dir=tests --runner="python -m pytest -x" --test-time-multiplier=3
       - name: Results summary
         if: always()
-        run: mutmut results --show-all
+        run: mutmut results
