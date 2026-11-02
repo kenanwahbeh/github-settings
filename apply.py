@@ -322,7 +322,13 @@ def main():
         analysis["secret_scanning_push_protection"] = {"status": "enabled"}
 
     def secret_scanning():
-        result = gh("-X", "PATCH", f"repos/{repo}", body={"security_and_analysis": analysis}, dry_run=dry)
+        try:
+            result = gh("-X", "PATCH", f"repos/{repo}", body={"security_and_analysis": analysis}, dry_run=dry)
+        except RuntimeError as error:
+            if "HTTP 403" in str(error) or "HTTP 404" in str(error):
+                print("  Secret scanning is unavailable on this repository; nothing to change")
+                return
+            raise
         if dry:
             return
         statuses = {name: (result.get("security_and_analysis") or {}).get(name, {}).get("status")

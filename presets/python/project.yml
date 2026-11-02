@@ -1,0 +1,6 @@
+project:
+  type: python
+  package_manager: uv
+  test_command: uv run pytest
+  lint_command: uv run ruff check .
+  docker: false

@@ -1,0 +1,55 @@
+name: bootstrap-project
+
+on:
+  workflow_dispatch:
+    inputs:
+      preset:
+        description: "Project preset"
+        required: true
+        type: choice
+        options:
+          - generic
+          - python
+          - nextjs
+          - cloudflare-worker
+      ai_review:
+        description: "Enable optional Gemini review"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Prepare bootstrap branch
+        env:
+          PRESET: ${{ inputs.preset }}
+          AI_REVIEW: ${{ inputs.ai_review }}
+        run: |
+          bash scripts/bootstrap-project.sh "$PRESET"
+          if [[ "$AI_REVIEW" == true ]]; then
+            mkdir -p .gemini
+            cp .gemini/config.example.yaml .gemini/config.yaml
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "bootstrap/$PRESET"
+          git add project.yml README.md .gemini/config.yaml 2>/dev/null || git add project.yml README.md
+          git commit -m "chore: initialize project preset"
+          git push --set-upstream origin "bootstrap/$PRESET"
+      - name: Open bootstrap pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRESET: ${{ inputs.preset }}
+        run: >-
+          gh pr create --base main --head "bootstrap/$PRESET"
+          --title "chore: initialize $PRESET project"
+          --body "Initial project bootstrap generated from the repository template."

@@ -1,0 +1,26 @@
+# Pre-commit CI — runs ruff, mypy, gitleaks, actionlint, hadolint on every PR.
+# All hooks are defined in .pre-commit-config.yaml (must exist in the target repo).
+# Actions are pinned to full commit SHAs.
+name: pre-commit
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        if: ${{ hashFiles('.pre-commit-config.yaml') != '' }}
+        with:
+          python-version: "3.12"
+      - name: Install pre-commit
+        if: ${{ hashFiles('.pre-commit-config.yaml') != '' }}
+        run: python -m pip install --disable-pip-version-check pre-commit
+      - name: Run pre-commit
+        if: ${{ hashFiles('.pre-commit-config.yaml') != '' }}
+        run: pre-commit run --all-files --show-diff-on-failure

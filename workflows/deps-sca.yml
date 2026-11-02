@@ -1,0 +1,26 @@
+# Dependency SCA — OSV-Scanner.
+# Uploads SARIF to GitHub Security tab (Code Scanning alerts).
+# Actions are pinned to full commit SHAs.
+name: deps-sca
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '30 2 * * 1'   # weekly Monday 02:30 UTC
+  workflow_dispatch:
+permissions:
+  contents: read
+  security-events: write   # for SARIF upload
+jobs:
+  osv-scanner:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: google/osv-scanner@037c3543ac60359190459b10fbb5331568b4c8f5 # v1.7.0
+        with:
+          args: "--recursive --format sarif --output osv.sarif ."
+      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v3
+        with:
+          sarif_file: osv.sarif
+          category: osv-scanner

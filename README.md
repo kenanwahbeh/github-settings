@@ -1,4 +1,4 @@
-# github-settings — إعدادات GitHub ودليل وكيل البرمجة
+# قالب إعدادات GitHub ودليل وكيل البرمجة
 
 هذا المستودع يؤدي وظيفتين منفصلتين:
 1. **مستودع مرجعي لإعدادات GitHub**: يطبّق `settings.yml` عبر `apply.py` عند الطلب.
@@ -21,18 +21,33 @@
 يحتاج التطبيق إلى `gh` مسجّل الدخول و`uv`:
 
 ```bash
-uv run apply.py kenanwahbeh/<repository> --dry-run
-uv run apply.py kenanwahbeh/<repository>
-uv run apply.py kenanwahbeh/<repository> --check test
+uv run apply.py <owner>/<repository> --dry-run
+uv run apply.py <owner>/<repository>
+uv run apply.py <owner>/<repository> --check test
 ```
+
+### إنشاء مستودع جديد من القالب
+
+شغّل workflow باسم `create-repository` من تبويب **Actions → Run workflow**. سيطلب منك اسم المستودع، الوصف، نوع الرؤية، وpreset المشروع:
+
+- `generic`: لأي مشروع عام أو خاص.
+- `python`: مشروع Python يستخدم `uv` و`pytest` و`ruff`.
+- `nextjs`: مشروع Next.js يستخدم `npm`.
+- `cloudflare-worker`: مشروع Cloudflare Worker عام؛ لا يتيح الإنشاء الخاص حالياً.
+
+احفظ Fine-grained PAT أو GitHub App token باسم `REPO_CREATION_TOKEN` في Secrets الخاصة بهذا المستودع. يحتاج الرمز صلاحية إنشاء المستودعات وAdministrate repository على المستودع الجديد، لأن workflow يستخدمه لإنشاء المستودع ثم تطبيق `settings.yml` عليه. لا يُكتب الرمز داخل الملفات أو سجلات التشغيل. عند رفض Secret Scanning في مستودع خاص بسبب الخطة، يتابع التطبيق بقية الإعدادات ويترك Gitleaks بديلاً. بعد ذلك يشغّل workflow تهيئة لفتح Pull Request.
+
+قبل الاستخدام، فعّل **Template repository** من إعدادات هذا المستودع، وتأكد أن الرمز يملك إنشاء مستودعات تحت الحساب أو المنظمة المطلوبة. لا تستخدم `GITHUB_TOKEN` الخاص بالتشغيل لهذا الغرض؛ صلاحياته محصورة عادة بالمستودع الحالي. ينفذ workflow معاينة `--dry-run` ثم التطبيق الفعلي، بينما تبقى أسماء checks المطلوبة إعداداً لاحقاً بعد ظهورها في أول PR.
+
+لتفعيل مراجعة Gemini الاختيارية، مرّر `ai_review=true` وأضف إعداد الاعتماد الخاص بالتكامل في الجهة التي ستشغّل Gemini. ملف `.gemini/config.example.yaml` لا يحتوي أي مفتاح أو سر، ومراجعة الذكاء الاصطناعي ليست شرطاً لنجاح الدمج.
 
 ابدأ بـ `--dry-run` لمراجعة التغييرات؛ في هذا الوضع تنفّذ الأداة عمليات القراءة فقط وتعرض عمليات الكتابة دون تنفيذها (يتطلب اتصالاً و`gh` مصادقاً عليه وصلاحيات قراءة). يتحقق التطبيق من صيغة `owner/repository` قبل أي اتصال، ويرفض المسارات أو معاملات URL غير الصالحة. في وضع المعاينة لا تُنفّذ إلا طرق HTTP الآمنة المعروفة (`GET` و`HEAD` و`OPTIONS`)؛ أي طريقة أخرى أو خيار `-X` ناقص يُعامل كعملية كتابة ويُمنع تنفيذه. هذا دفاع احترازي حتى لا يؤدي إدخال طريقة HTTP جديدة إلى تنفيذ تغيير أثناء المعاينة. لا تمرّر `--check` إلا بأسماء فحوص CI ظهرت فعلاً في نتائج Pull Request، لأن الاسم الخاطئ قد يمنع الدمج. عند تمرير `--check` تصبح القائمة التي تمرّرها هي **القائمة الكاملة** للفحوص المطلوبة، وليست إضافة إلى القائمة الحية؛ لذلك أعد ذكر كل فحص تريد الإبقاء عليه. عند عدم تمريرها، يحافظ التطبيق على قاعدة الفحوص الحية كما هي. أما توقيع commits فيُضاف كقاعدة `required_signatures` إلى الحالة المطلوبة، لكنه لا يصبح مفروضاً على GitHub إلا بعد تطبيق القواعد والتحقق من ruleset الحي.
 
 **مزامنة قواعد الحماية لهذا المستودع نفسه:** أسماء الفحوص التي يجب أن تمنع الدمج هي `gitleaks` و`semgrep` و`Regression and consistency checks`. بعد التحقق من ظهورها في Checks، راجع المعاينة ثم طبّقها بالأمر التالي؛ هذا يستبدل قائمة الفحوص المطلوبة بهذه الثلاثة مع الاحتفاظ ببقية قواعد الحماية التي يبنيها الإعداد:
 
 ```bash
-uv run apply.py kenanwahbeh/github-settings --dry-run --check gitleaks --check semgrep --check "Regression and consistency checks"
-uv run apply.py kenanwahbeh/github-settings --check gitleaks --check semgrep --check "Regression and consistency checks"
+uv run apply.py <owner>/<repository> --dry-run --check gitleaks --check semgrep --check "Regression and consistency checks"
+uv run apply.py <owner>/<repository> --check gitleaks --check semgrep --check "Regression and consistency checks"
 ```
 
 لا تعتبر التوقيعات أو الفحوص مفروضة لمجرد وجودها في `settings.yml`: بعد التطبيق، افتح **Settings → Rules → main** وتحقق من وجود `required_signatures` ومن قائمة الفحوص الثلاثة. سياسة ملكية القواعد موثّقة في تعليقات `settings.yml`: يستثني الفرع قاعدة `required_status_checks` من الاستبدال فقط عندما لا تمرر `--check`؛ أما قواعد الوسوم فتملكها `settings.yml` بالكامل.
