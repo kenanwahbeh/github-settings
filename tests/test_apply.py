@@ -380,7 +380,8 @@ class TestMainFlow(unittest.TestCase):
         self.assertEqual(code, 0)
         patches = [call for call in calls if call.args[-1] == "repos/o/r/code-scanning/ai-scan"]
         self.assertEqual(len(patches), 1)
-        self.assertEqual(patches[0].args[:2], ("-X", "PATCH"))
+        self.assertEqual(patches[0].args[-3:], ("-X", "PATCH", "repos/o/r/code-scanning/ai-scan"))
+        self.assertIn("X-GitHub-Api-Version: 2026-03-10", patches[0].args)
         self.assertEqual(patches[0].kwargs["body"], {"pr_scan": "disabled"})
 
     def test_read_failure_after_changes_exits_nonzero_and_summarizes(self):
